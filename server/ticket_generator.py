@@ -23,7 +23,7 @@ class TicketTemplate:
 # Easy tickets - clear category, simple resolution
 EASY_TICKETS = [
     TicketTemplate(
-        category="billing",
+        category="account",
         subject="Password Reset Request",
         body="Hi, I forgot my password and can't log into my account. My email is {email}. Can you help me reset it? Thanks!",
         sentiment=0.0,

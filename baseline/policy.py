@@ -50,12 +50,13 @@ class BaselinePolicy:
         self.classified = False
         self.current_category = None
         self.responded = False
+        self.escalated = False
     
     def reset(self):
-        """Reset policy state."""
         self.classified = False
         self.current_category = None
         self.responded = False
+        self.escalated = False
     
     def act(self, observation: SupportObservation) -> SupportAction:
         """
@@ -67,17 +68,10 @@ class BaselinePolicy:
         Returns:
             Action to take
         """
-        ticket_text = observation.ticket_text.lower()
-        
-        # Check for escalation first (hard tickets)
-        if self._should_escalate(ticket_text, observation.customer_sentiment):
-            return SupportAction(
-                action_type="escalate",
-                content="Customer requires immediate human assistance due to the severity and sensitivity of the issue. Elevated emotional state detected."
-            )
+        ticket_text = f"{observation.ticket_subject} {observation.ticket_text}".lower()
         
         # Step 1: Classify if not done
-        if not observation.is_classified:
+        if not observation.is_classified and not self.classified:
             category = self._classify(ticket_text)
             self.classified = True
             self.current_category = category
@@ -97,11 +91,19 @@ class BaselinePolicy:
                 action_type="respond",
                 content=response
             )
+            
+        # Step 3: Check for escalation (hard tickets)
+        if not self.escalated and self._should_escalate(ticket_text, observation.customer_sentiment):
+            self.escalated = True
+            return SupportAction(
+                action_type="escalate",
+                content="Customer requires immediate human assistance due to the severity and sensitivity of the issue. Elevated emotional state detected."
+            )
         
-        # Step 3: Resolve
+        # Step 4: Resolve
         return SupportAction(
             action_type="resolve",
-            content=f"Issue resolved. Category: {observation.current_classification}. Customer's concern has been addressed through appropriate response and action."
+            content=f"Issue resolved. Category: {observation.current_classification or self.current_category}. Customer's concern has been addressed through appropriate response and action."
         )
     
     def _classify(self, text: str) -> str:

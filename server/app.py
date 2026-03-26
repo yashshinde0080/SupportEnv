@@ -230,6 +230,7 @@ async def run_baseline():
     for difficulty in ["easy", "medium", "hard"]:
         env = SupportEnvironment()
         observation = env.reset(seed=42, difficulty=difficulty)
+        policy.reset()
         
         total_reward = 0.0
         steps = 0
