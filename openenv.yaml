@@ -1,0 +1,98 @@
+# OpenEnv Environment Manifest
+# SupportEnv - Customer Support RL Environment
+
+name: support_env
+version: "1.0.0"
+description: |
+  A production-grade reinforcement learning environment that simulates 
+  customer support workflows. Agents learn to classify tickets, respond 
+  to customers, and make escalation decisions.
+
+# Environment metadata
+author: "Your Name"
+license: "MIT"
+repository: "https://huggingface.co/spaces/yashshinde/SupportEnv"
+documentation: "https://github.com/yashshinde/SupportEnv/blob/main/README.md"
+
+# Tags for discoverability
+tags:
+  - customer-support
+  - nlp
+  - decision-making
+  - real-world
+  - multi-step
+
+# Environment configuration
+config:
+  # Supported task difficulties
+  difficulties:
+    - easy
+    - medium
+    - hard
+  
+  # Default settings
+  defaults:
+    max_steps: 10
+    seed: 42
+  
+  # Action space
+  action_space:
+    type: discrete
+    actions:
+      - classify
+      - respond
+      - escalate
+      - request_info
+      - resolve
+  
+  # Observation space
+  observation_space:
+    type: dict
+    fields:
+      ticket_text: string
+      ticket_subject: string
+      customer_sentiment: float
+      interaction_history: list
+      is_classified: bool
+      steps_remaining: int
+
+# Server configuration
+server:
+  port: 7860
+  host: "0.0.0.0"
+  workers: 1
+  concurrent_sessions: true
+
+# Grading configuration
+grading:
+  score_range: [0.0, 1.0]
+  deterministic: true
+  
+  # Weights by difficulty
+  weights:
+    easy:
+      classification: 0.30
+      response_quality: 0.40
+      escalation: 0.05
+      resolution: 0.15
+      efficiency: 0.10
+    medium:
+      classification: 0.25
+      response_quality: 0.30
+      escalation: 0.10
+      resolution: 0.20
+      efficiency: 0.15
+    hard:
+      classification: 0.15
+      response_quality: 0.20
+      escalation: 0.30
+      resolution: 0.20
+      efficiency: 0.15
+
+# Baseline configuration
+baseline:
+  type: rule-based
+  expected_scores:
+    easy: 0.85
+    medium: 0.65
+    hard: 0.40

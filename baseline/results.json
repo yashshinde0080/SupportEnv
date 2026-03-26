@@ -1,0 +1,290 @@
+{
+  "timestamp": "2026-03-26T18:34:12.810087",
+  "seeds": [
+    42,
+    123,
+    456
+  ],
+  "detailed_results": {
+    "easy": [
+      {
+        "difficulty": "easy",
+        "score": 0.545,
+        "total_reward": 0.13,
+        "steps": 3,
+        "passed": false,
+        "breakdown": {
+          "classification": 0.2,
+          "response_quality": 0.75,
+          "escalation_decision": 1.0,
+          "resolution": 0.5,
+          "efficiency": 0.6
+        },
+        "feedback": "[EASY] classification: Poor (0.20) | response_quality: Good (0.75) | escalation_decision: Excellent (1.00) | resolution: Needs improvement (0.50) | efficiency: Good (0.60)",
+        "action_history": [
+          {
+            "step": 1,
+            "action_type": "classify",
+            "content": "account"
+          },
+          {
+            "step": 2,
+            "action_type": "respond",
+            "content": "I understand you need help with your account. For security verification, I've confirmed your details"
+          },
+          {
+            "step": 3,
+            "action_type": "resolve",
+            "content": "Issue resolved. Category: account. Customer's concern has been addressed through appropriate respons"
+          }
+        ]
+      },
+      {
+        "difficulty": "easy",
+        "score": 0.545,
+        "total_reward": 0.13,
+        "steps": 3,
+        "passed": false,
+        "breakdown": {
+          "classification": 0.2,
+          "response_quality": 0.75,
+          "escalation_decision": 1.0,
+          "resolution": 0.5,
+          "efficiency": 0.6
+        },
+        "feedback": "[EASY] classification: Poor (0.20) | response_quality: Good (0.75) | escalation_decision: Excellent (1.00) | resolution: Needs improvement (0.50) | efficiency: Good (0.60)",
+        "action_history": [
+          {
+            "step": 1,
+            "action_type": "classify",
+            "content": "account"
+          },
+          {
+            "step": 2,
+            "action_type": "respond",
+            "content": "I understand you need help with your account. For security verification, I've confirmed your details"
+          },
+          {
+            "step": 3,
+            "action_type": "resolve",
+            "content": "Issue resolved. Category: account. Customer's concern has been addressed through appropriate respons"
+          }
+        ]
+      },
+      {
+        "difficulty": "easy",
+        "score": 0.625,
+        "total_reward": 0.53,
+        "steps": 3,
+        "passed": true,
+        "breakdown": {
+          "classification": 0.2,
+          "response_quality": 0.95,
+          "escalation_decision": 1.0,
+          "resolution": 0.5,
+          "efficiency": 0.6
+        },
+        "feedback": "[EASY] classification: Poor (0.20) | response_quality: Excellent (0.95) | escalation_decision: Excellent (1.00) | resolution: Needs improvement (0.50) | efficiency: Good (0.60)",
+        "action_history": [
+          {
+            "step": 1,
+            "action_type": "classify",
+            "content": "technical"
+          },
+          {
+            "step": 2,
+            "action_type": "respond",
+            "content": "I'm sorry to hear you're experiencing technical difficulties. I understand how frustrating this can "
+          },
+          {
+            "step": 3,
+            "action_type": "resolve",
+            "content": "Issue resolved. Category: technical. Customer's concern has been addressed through appropriate respo"
+          }
+        ]
+      }
+    ],
+    "medium": [
+      {
+        "difficulty": "medium",
+        "score": 0.787,
+        "total_reward": 0.825,
+        "steps": 3,
+        "passed": true,
+        "breakdown": {
+          "classification": 1.0,
+          "response_quality": 0.69,
+          "escalation_decision": 1.0,
+          "resolution": 0.55,
+          "efficiency": 0.8
+        },
+        "feedback": "[MEDIUM] classification: Excellent (1.00) | response_quality: Good (0.69) | escalation_decision: Excellent (1.00) | resolution: Needs improvement (0.55) | efficiency: Excellent (0.80)",
+        "action_history": [
+          {
+            "step": 1,
+            "action_type": "classify",
+            "content": "billing"
+          },
+          {
+            "step": 2,
+            "action_type": "respond",
+            "content": "Thank you for contacting us about your billing concern. I understand this is frustrating. Let me loo"
+          },
+          {
+            "step": 3,
+            "action_type": "resolve",
+            "content": "Issue resolved. Category: billing. Customer's concern has been addressed through appropriate respons"
+          }
+        ]
+      },
+      {
+        "difficulty": "medium",
+        "score": 0.787,
+        "total_reward": 0.825,
+        "steps": 3,
+        "passed": true,
+        "breakdown": {
+          "classification": 1.0,
+          "response_quality": 0.69,
+          "escalation_decision": 1.0,
+          "resolution": 0.55,
+          "efficiency": 0.8
+        },
+        "feedback": "[MEDIUM] classification: Excellent (1.00) | response_quality: Good (0.69) | escalation_decision: Excellent (1.00) | resolution: Needs improvement (0.55) | efficiency: Excellent (0.80)",
+        "action_history": [
+          {
+            "step": 1,
+            "action_type": "classify",
+            "content": "billing"
+          },
+          {
+            "step": 2,
+            "action_type": "respond",
+            "content": "Thank you for contacting us about your billing concern. I understand this is frustrating. Let me loo"
+          },
+          {
+            "step": 3,
+            "action_type": "resolve",
+            "content": "Issue resolved. Category: billing. Customer's concern has been addressed through appropriate respons"
+          }
+        ]
+      },
+      {
+        "difficulty": "medium",
+        "score": 0.22,
+        "total_reward": -0.6,
+        "steps": 1,
+        "passed": false,
+        "breakdown": {
+          "classification": 0.0,
+          "response_quality": 0.0,
+          "escalation_decision": 0.3,
+          "resolution": 0.2,
+          "efficiency": 1.0
+        },
+        "feedback": "[MEDIUM] classification: Poor (0.00) | response_quality: Poor (0.00) | escalation_decision: Poor (0.30) | resolution: Poor (0.20) | efficiency: Excellent (1.00)",
+        "action_history": [
+          {
+            "step": 1,
+            "action_type": "escalate",
+            "content": "Customer requires immediate human assistance due to the severity and sensitivity of the issue. Eleva"
+          }
+        ]
+      }
+    ],
+    "hard": [
+      {
+        "difficulty": "hard",
+        "score": 0.55,
+        "total_reward": 1.08,
+        "steps": 1,
+        "passed": false,
+        "breakdown": {
+          "classification": 0.0,
+          "response_quality": 0.0,
+          "escalation_decision": 1.0,
+          "resolution": 0.5,
+          "efficiency": 1.0
+        },
+        "feedback": "[HARD] classification: Poor (0.00) | response_quality: Poor (0.00) | escalation_decision: Excellent (1.00) | resolution: Needs improvement (0.50) | efficiency: Excellent (1.00)",
+        "action_history": [
+          {
+            "step": 1,
+            "action_type": "escalate",
+            "content": "Customer requires immediate human assistance due to the severity and sensitivity of the issue. Eleva"
+          }
+        ]
+      },
+      {
+        "difficulty": "hard",
+        "score": 0.55,
+        "total_reward": 1.08,
+        "steps": 1,
+        "passed": false,
+        "breakdown": {
+          "classification": 0.0,
+          "response_quality": 0.0,
+          "escalation_decision": 1.0,
+          "resolution": 0.5,
+          "efficiency": 1.0
+        },
+        "feedback": "[HARD] classification: Poor (0.00) | response_quality: Poor (0.00) | escalation_decision: Excellent (1.00) | resolution: Needs improvement (0.50) | efficiency: Excellent (1.00)",
+        "action_history": [
+          {
+            "step": 1,
+            "action_type": "escalate",
+            "content": "Customer requires immediate human assistance due to the severity and sensitivity of the issue. Eleva"
+          }
+        ]
+      },
+      {
+        "difficulty": "hard",
+        "score": 0.55,
+        "total_reward": 1.08,
+        "steps": 1,
+        "passed": false,
+        "breakdown": {
+          "classification": 0.0,
+          "response_quality": 0.0,
+          "escalation_decision": 1.0,
+          "resolution": 0.5,
+          "efficiency": 1.0
+        },
+        "feedback": "[HARD] classification: Poor (0.00) | response_quality: Poor (0.00) | escalation_decision: Excellent (1.00) | resolution: Needs improvement (0.50) | efficiency: Excellent (1.00)",
+        "action_history": [
+          {
+            "step": 1,
+            "action_type": "escalate",
+            "content": "Customer requires immediate human assistance due to the severity and sensitivity of the issue. Eleva"
+          }
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "easy": {
+      "avg_score": 0.5717,
+      "min_score": 0.545,
+      "max_score": 0.625,
+      "avg_reward": 0.2633,
+      "pass_rate": 0.3333333333333333
+    },
+    "medium": {
+      "avg_score": 0.598,
+      "min_score": 0.22,
+      "max_score": 0.787,
+      "avg_reward": 0.35,
+      "pass_rate": 0.6666666666666666
+    },
+    "hard": {
+      "avg_score": 0.55,
+      "min_score": 0.55,
+      "max_score": 0.55,
+      "avg_reward": 1.08,
+      "pass_rate": 0.0
+    },
+    "overall": {
+      "avg_score": 0.5732
+    }
+  }
+}
