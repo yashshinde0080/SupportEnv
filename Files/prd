@@ -1,0 +1,285 @@
+================================================================================
+                      PRODUCT REQUIREMENTS DOCUMENT (PRD)
+                     SupportEnv — Customer Support RL Environment
+================================================================================
+
+Document Version  : 2.0
+Date              : 2026-03-27
+Author            : 
+Status            : Active
+License           : MIT
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+SupportEnv is a production-grade Reinforcement Learning (RL) environment that
+simulates real-world customer support workflows. AI agents operating within this
+environment learn to classify support tickets, respond to customers with empathy,
+make escalation decisions, and resolve issues efficiently.
+
+Customer support is a $400B+ industry where AI can deliver immediate, measurable
+value. SupportEnv provides a standardised training and evaluation platform — built
+on the OpenEnv specification — for developing, benchmarking, and comparing
+autonomous support agents.
+
+================================================================================
+2. PROBLEM STATEMENT
+================================================================================
+
+2.1 Industry Pain Points
+    - Customer support teams face high volume, repetitive queries, and agent
+      burnout.
+    - Existing AI solutions lack a standardised environment for training support
+      agents end-to-end (classify → respond → escalate → resolve).
+    - No open benchmark exists for comparing different autonomous support
+      strategies under controlled conditions.
+
+2.2 What SupportEnv Solves
+    - Provides a deterministic, reproducible environment for RL agent training.
+    - Offers progressive difficulty (easy / medium / hard) for curriculum
+      learning.
+    - Supplies deterministic grading so results are comparable across agents.
+    - Exposes a WebSocket + REST API that any RL framework can consume.
+
+================================================================================
+3. PROJECT GOALS & SUCCESS CRITERIA
+================================================================================
+
+ID    Goal                                           Success Metric
+----  ---------------------------------------------  ----------------------------
+G-01  Provide a working OpenEnv-compatible env       openenv validate passes
+G-02  Support 3 difficulty tiers                     Easy / Medium / Hard tasks
+G-03  Deterministic grading                          Same inputs → same score
+G-04  Baseline agent scores ≥ 0.63 average           Baseline run confirmed
+G-05  Full API surface (REST + WebSocket + Gradio)   All endpoints return 200
+G-06  Docker-ready deployment                        Build + run without errors
+G-07  HuggingFace Spaces deployment                  Live public Space
+
+================================================================================
+4. TARGET USERS & PERSONAS
+================================================================================
+
+Persona 1 — RL Researcher
+    - Trains agents using PPO / DQN / custom algorithms.
+    - Needs reproducible episodes (seed support), structured observations, and
+      well-defined reward signals.
+
+Persona 2 — AI Engineer
+    - Integrates LLM-based agents (GPT, Claude, Gemini) with the environment.
+    - Uses the REST / WebSocket API to build agentic pipelines.
+    - Values clear action schemas and typed Pydantic models.
+
+Persona 3 — Hackathon Participant
+    - Needs a quick-start path: reset → step → grade.
+    - Relies on the /baseline endpoint as a reference score.
+    - Uses the Gradio /web UI for interactive exploration.
+
+Persona 4 — Support Operations Lead
+    - Evaluates whether an AI agent is ready for production.
+    - Cares about escalation accuracy, response quality, and harmful-response
+      detection.
+
+================================================================================
+5. FEATURE REQUIREMENTS
+================================================================================
+
+5.1 Core Environment Loop
+    ┌────────────────────────────────────────────────────┐
+    │  reset(seed, difficulty)  →  Observation           │
+    │  step(action)             →  Observation + Reward   │
+    │  state                   →  Internal State          │
+    │  grade_episode()         →  GradeResult             │
+    └────────────────────────────────────────────────────┘
+
+5.2 Action Space (Discrete, 5 actions)
+
+    Action         Description                      Content
+    ──────────     ────────────────────────────────  ─────────────────────
+    classify       Categorise the ticket             billing / technical /
+                                                     account / general
+    respond        Send a response to customer       Free-text response
+    escalate       Escalate to human agent           Reason for escalation
+    request_info   Ask customer for more info        What info is needed
+    resolve        Mark ticket as resolved            Resolution summary
+
+5.3 Observation Space
+
+    Field                   Type            Description
+    ──────────────────────  ──────────────  ─────────────────────────────
+    ticket_id               str             Unique ticket identifier
+    ticket_text             str             Full ticket body
+    ticket_subject          str             Ticket subject line
+    customer_name           str             Customer's name
+    interaction_history     List[Dict]      Chat history (role + content)
+    customer_sentiment      float [-1, 1]   -1 = angry, 0 = neutral, 1 = happy
+    current_classification  Optional[str]   Category if classified
+    is_classified           bool            Whether ticket is classified
+    is_escalated            bool            Whether ticket is escalated
+    task_difficulty          str             easy / medium / hard
+    steps_remaining         int             Steps left before timeout
+    max_steps               int             Maximum allowed steps
+    message                 str             Feedback message from env
+    available_actions       List[str]       Actions currently valid
+
+5.4 Reward Structure
+
+    Event                              Reward
+    ───────────────────────────────    ──────
+    Correct classification              +0.25
+    Good response (empathetic + fix)    +0.30
+    Correct escalation decision         +0.35
+    Successful resolution               +0.40
+    Efficiency bonus                    +0.10
+    Wrong classification                −0.15
+    Harmful response                    −0.40
+    Missed escalation                   −0.35
+
+5.5 Task Definitions
+
+    Task   Difficulty   Max Steps   Description
+    ─────  ──────────   ─────────   ────────────────────────────────────────
+    FAQ    Easy         5           Simple queries (password resets, hours)
+    Multi  Medium       8           Billing disputes, technical bugs
+    Esc    Hard         10          Angry customers, fraud, sensitive issues
+
+    Expected action flows:
+      Easy   : classify → respond → resolve
+      Medium : classify → request_info → respond → resolve
+      Hard   : classify → respond (de-escalate) → escalate
+
+5.6 Grading System
+
+    - Score range: 0.0 – 1.0
+    - Deterministic: same episode data always produces the same score.
+    - Dimension weights vary by difficulty:
+
+      Dimension             Easy    Medium   Hard
+      ────────────────────  ──────  ──────   ──────
+      Classification        30%     25%      15%
+      Response Quality      40%     30%      20%
+      Escalation Decision    5%     10%      30%
+      Resolution            15%     20%      20%
+      Efficiency            10%     15%      15%
+
+5.7 Baseline Agent
+    - Rule-based policy shipped with the project.
+    - Expected average score: 0.63
+      ┌──────────┬───────┬────────┬───────┐
+      │ Difficulty│ Score │ Reward │ Steps │
+      ├──────────┼───────┼────────┼───────┤
+      │ Easy      │ 0.85  │ 0.92   │ 3     │
+      │ Medium    │ 0.65  │ 0.58   │ 5     │
+      │ Hard      │ 0.40  │ 0.25   │ 4     │
+      │ Average   │ 0.63  │ —      │ —     │
+      └──────────┴───────┴────────┴───────┘
+
+5.8 Web Interface (Gradio)
+    - Mounted at /web.
+    - Allows interactive ticket classification, response, and grading.
+    - Useful for demos and manual exploration.
+
+================================================================================
+6. USER STORIES
+================================================================================
+
+US-01  As an RL researcher, I want to reset the environment with a specific seed
+       so that I can reproduce experiments exactly.
+
+US-02  As an AI engineer, I want typed Pydantic action/observation models so
+       that my IDE gives me auto-completion and type errors at dev time.
+
+US-03  As a hackathon participant, I want a /baseline endpoint that runs a
+       reference agent so I know what score to beat.
+
+US-04  As a support ops lead, I want a grading breakdown showing classification,
+       response quality, and escalation accuracy so I can evaluate agent
+       readiness.
+
+US-05  As any user, I want a Gradio web interface so I can manually interact
+       with the environment without writing code.
+
+US-06  As a developer, I want Docker build + run support so I can deploy the
+       environment anywhere.
+
+US-07  As a researcher, I want concurrent session support so I can run multiple
+       episodes in parallel.
+
+================================================================================
+7. API ENDPOINTS
+================================================================================
+
+Endpoint               Method   Description
+─────────────────────  ──────   ─────────────────────────────────
+/health                GET      Health check — returns 200
+/tasks                 GET      List available tasks with schemas
+/api/reset             POST     Start a new episode (HTTP)
+/api/step              POST     Take an action (HTTP)
+/api/state/{id}        GET      Get current internal state
+/grader                POST     Grade a completed episode
+/baseline              GET      Run baseline agent on all tasks
+/web                   GET      Gradio interactive UI
+/ws                    WS       WebSocket for real-time interaction
+
+================================================================================
+8. NON-FUNCTIONAL REQUIREMENTS
+================================================================================
+
+NFR-01  Performance   : Single episode (reset + 10 steps + grade) < 500 ms.
+NFR-02  Concurrency   : Support ≥ 100 concurrent environments.
+NFR-03  Reproducibility: Same seed + same actions = identical rewards & grades.
+NFR-04  Portability    : Run on Python 3.10 / 3.11 / 3.12.
+NFR-05  Security       : Optional API key, configurable CORS origins.
+NFR-06  Logging        : Structured JSON logs, optional file output.
+NFR-07  Rate Limiting  : Configurable (default: 100 req / 60 s window).
+
+================================================================================
+9. DEPLOYMENT TARGETS
+================================================================================
+
+Target                 Details
+─────────────────────  ──────────────────────────────────────────
+Local development      uvicorn server.app:app --reload (port 8000)
+Docker container       docker build -f server/Dockerfile
+HuggingFace Spaces     openenv push --repo-id username/support-env
+CI / CD                pytest tests/ -v && openenv validate
+
+================================================================================
+10. SUCCESS METRICS & KPIs
+================================================================================
+
+Metric                              Target
+──────────────────────────────────  ─────────
+openenv validate pass               ✓
+All pytest tests green              ✓
+Baseline avg score                  ≥ 0.63
+API response time (p95)             < 200 ms
+Docker image builds cleanly         ✓
+HF Space deploys & serves traffic   ✓
+
+================================================================================
+11. RISKS & MITIGATIONS
+================================================================================
+
+Risk                                     Mitigation
+───────────────────────────────────────  ──────────────────────────────────
+Ticket generation lacks diversity        Expand template pool, add fuzzing
+LLM-based evaluation adds non-det.      Keep grading purely rule-based
+Gradio version conflicts                Pin gradio>=4.0.0 in deps
+OpenEnv spec changes                    Track openenv-core releases
+
+================================================================================
+12. FUTURE ROADMAP
+================================================================================
+
+Phase   Feature                         Priority
+──────  ──────────────────────────────  ────────
+v1.1    Multi-turn conversation depth   High
+v1.2    LLM-judge response scoring      Medium
+v1.3    Custom ticket upload             Medium
+v2.0    Multi-agent support team sim    Low
+v2.1    Live customer integration        Exploratory
+
+================================================================================
+                              END OF PRD
+================================================================================

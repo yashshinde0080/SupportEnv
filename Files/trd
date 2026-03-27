@@ -1,0 +1,565 @@
+================================================================================
+                   TECHNICAL REQUIREMENTS DOCUMENT (TRD)
+                  SupportEnv — Customer Support RL Environment
+================================================================================
+
+Document Version  : 2.0
+Date              : 2026-03-27
+Author            : Yash Shinde
+Status            : Active
+License           : MIT
+
+================================================================================
+1. SYSTEM OVERVIEW
+================================================================================
+
+SupportEnv is a FastAPI-based reinforcement learning server that exposes a
+customer-support simulation through REST, WebSocket, and Gradio interfaces.
+It conforms to the OpenEnv specification (openenv-core >= 0.1.0), allowing any
+compatible RL client to train and evaluate agents.
+
+High-level data flow:
+
+    ┌─────────┐   HTTP / WS    ┌──────────────┐
+    │  Client  │ ──────────────▶│  FastAPI App  │
+    │ (agent)  │ ◀──────────────│  (server/)    │
+    └─────────┘   JSON          └──────┬───────┘
+                                       │
+                        ┌──────────────┼──────────────┐
+                        ▼              ▼              ▼
+                  ┌──────────┐  ┌───────────┐  ┌──────────┐
+                  │Env Logic │  │  Grader   │  │  Reward  │
+                  │  (RL)    │  │(scoring)  │  │ Engine   │
+                  └──────────┘  └───────────┘  └──────────┘
+                        │
+                        ▼
+                  ┌──────────────┐
+                  │Ticket Gen.   │
+                  │(templates)   │
+                  └──────────────┘
+
+================================================================================
+2. TECHNOLOGY STACK
+================================================================================
+
+Layer               Technology               Version / Notes
+──────────────────  ───────────────────────  ──────────────────────────────
+Language            Python                   >= 3.10 (tested 3.10–3.12)
+Web Framework       FastAPI                  >= 0.100.0
+ASGI Server         Uvicorn (standard)       >= 0.23.0
+Data Validation     Pydantic v2              >= 2.0.0
+Settings Mgmt       pydantic-settings        >= 2.0.0
+Environment Vars    python-dotenv            >= 1.0.0
+WebSocket           websockets               >= 11.0
+HTTP Client         httpx                    >= 0.24.0
+RL Spec             openenv-core             >= 0.1.0
+LLM (Optional)      openai                   >= 1.0.0
+Web UI              Gradio                   >= 4.0.0
+Testing             pytest + pytest-asyncio  >= 7.0 / >= 0.21
+Linting             ruff                     >= 0.1.0
+Formatting          black                    >= 23.0.0
+Containerisation    Docker                   Multi-stage Dockerfile
+Package Mgmt        pip / uv                 pyproject.toml (PEP 621)
+
+================================================================================
+3. PROJECT STRUCTURE
+================================================================================
+
+SupportEnv/
+├── main.py                    # Entry-point (imports server.app)
+├── models.py                  # Pydantic models: Action, Observation, State
+├── client.py                  # WebSocket client (EnvClient subclass)
+├── config.py                  # Settings via pydantic-settings + .env
+├── openenv.yaml               # OpenEnv environment manifest
+├── pyproject.toml             # PEP 621 package definition
+├── requirements.txt           # Flat dependency list (fallback)
+├── .env.example               # Environment variable template
+│
+├── server/                    # Backend package
+│   ├── __init__.py
+│   ├── app.py                 # FastAPI application + route registration
+│   ├── environment.py         # Core RL loop (reset / step / state / grade)
+│   ├── ticket_generator.py    # Ticket template engine + task definitions
+│   ├── graders.py             # Deterministic grading logic
+│   ├── reward.py              # Per-step & episode reward computation
+│   ├── tasks.py               # (Placeholder) Task registry
+│   ├── utils.py               # (Placeholder) Shared utilities
+│   └── Dockerfile             # Production container image
+│
+├── baseline/                  # Reference agent
+│   ├── __init__.py
+│   ├── policy.py              # Rule-based baseline policy
+│   ├── run_baseline.py        # CLI runner + results writer
+│   └── results.json           # Cached baseline scores
+│
+├── frontend/                  # Web UI
+│   ├── __init__.py
+│   └── gradio_ui.py           # Gradio interface (mounted at /web)
+│
+├── tests/                     # Automated tests
+│   ├── __init__.py
+│   ├── test_environment.py    # Environment unit tests
+│   ├── test_graders.py        # Grader determinism tests
+│   ├── test_api.py            # (Placeholder) API integration tests
+│   └── test_baseline.py       # (Placeholder) Baseline regression tests
+│
+├── scripts/                   # DevOps & utility scripts
+│   ├── linux/
+│   │   └── validate.sh
+│   └── windows/
+│
+├── Files/                     # Project documentation
+│   ├── prd                    # Product Requirements Document
+│   └── trd                    # Technical Requirements Document (this file)
+│
+└── docs.txt                   # Extended documentation / notes
+
+================================================================================
+4. ARCHITECTURE DETAILS
+================================================================================
+
+4.1 Core Classes & Inheritance
+
+    openenv.core.env_server.Environment   (abstract base)
+        └── SupportEnvironment            (server/environment.py)
+
+    openenv.core.env_server.Action        (abstract base)
+        └── SupportAction                 (models.py)
+
+    openenv.core.env_server.Observation   (abstract base)
+        └── SupportObservation            (models.py)
+
+    openenv.core.env_server.State         (abstract base)
+        └── SupportState                  (models.py)
+
+    openenv.core.env_client.EnvClient     (generic client)
+        └── SupportEnv (client)           (client.py)
+
+4.2 SupportEnvironment — Lifecycle
+
+    ┌────────────────────────────────────────────────────────────────┐
+    │                      EPISODE LIFECYCLE                         │
+    ├────────────────────────────────────────────────────────────────┤
+    │                                                                │
+    │  reset(seed, difficulty, task_id)                              │
+    │    ├─ Set random seed                                         │
+    │    ├─ TicketGenerator.generate_ticket(difficulty)              │
+    │    ├─ Initialise SupportState                                 │
+    │    ├─ Reset RewardEngine                                      │
+    │    └─ Return initial SupportObservation (done=False)          │
+    │                                                                │
+    │  step(action) — called in loop until done==True               │
+    │    ├─ Increment step_count                                    │
+    │    ├─ Record action in action_history                         │
+    │    ├─ Dispatch _handle_{classify|respond|escalate|...}        │
+    │    ├─ RewardEngine.compute_reward(...)                        │
+    │    ├─ Check termination conditions                            │
+    │    │    ├─ Resolved?                                          │
+    │    │    ├─ Escalated?                                         │
+    │    │    └─ Max steps reached?                                 │
+    │    ├─ (If done) compute_episode_final_reward(...)             │
+    │    └─ Return SupportObservation (reward, done, message)       │
+    │                                                                │
+    │  grade_episode()                                              │
+    │    ├─ Collect episode_data (actions, targets, flags)          │
+    │    └─ SupportGrader.grade_episode(**data) → GradeResult       │
+    │         ├─ score:     float [0.0, 1.0]                       │
+    │         ├─ breakdown: Dict[str, float]                        │
+    │         ├─ feedback:  str                                     │
+    │         └─ passed:    bool                                    │
+    │                                                                │
+    └────────────────────────────────────────────────────────────────┘
+
+4.3 Ticket Generator (server/ticket_generator.py — 15 KB)
+
+    - Maintains TASK_DEFINITIONS dict keyed by difficulty.
+    - Each definition includes:
+        task_id, name, description, max_steps,
+        ticket templates (subject, body, category, sentiment,
+        expected_resolution, requires_escalation).
+    - TicketGenerator(seed) → generate_ticket(difficulty, task_id)
+      Returns a dict with all ticket fields.
+
+4.4 Reward Engine (server/reward.py — 11 KB)
+
+    - compute_reward():  Per-step reward for individual actions.
+    - compute_episode_final_reward():  End-of-episode bonus / penalty.
+    - RewardBreakdown dataclass holds per-dimension scores.
+    - All computation is deterministic (no LLM calls).
+
+4.5 Grader (server/graders.py — 13 KB)
+
+    - SupportGrader.grade_episode() is the single entry point.
+    - Dimension weights are read from TASK_DEFINITIONS or openenv.yaml.
+    - GradeResult contains:
+        score (0.0–1.0), breakdown dict, feedback string, passed bool.
+    - Determinism requirement: same inputs always yield same score.
+
+4.6 Baseline Policy (baseline/policy.py — 7 KB)
+
+    - Rule-based: inspects observation, applies heuristics.
+    - Flow per difficulty:
+        Easy  : classify → respond → resolve
+        Medium: classify → request_info → respond → resolve
+        Hard  : classify → respond → escalate
+    - run_baseline.py orchestrates env.reset → policy.act → env.step
+      loop for seeds [42, 123, 456], writing results.json.
+
+================================================================================
+5. API SPECIFICATION
+================================================================================
+
+5.1 REST Endpoints
+
+    GET  /health
+         Response: { "status": "healthy", "environment": "SupportEnv" }
+
+    GET  /tasks
+         Response: { "tasks": [ { task_id, name, difficulty,
+                     description, max_steps, action_schema } ] }
+
+    POST /api/reset
+         Body:     { session_id?, seed?, task_id?, difficulty? }
+         Response: { session_id, observation, done, reward }
+
+    POST /api/step
+         Body:     { session_id, action_type, content, confidence? }
+         Response: { observation, done, reward }
+
+    GET  /api/state/{session_id}
+         Response: SupportState (JSON)
+
+    POST /grader
+         Body:     { session_id }
+         Response: { score, breakdown, feedback, passed }
+
+    GET  /baseline
+         Response: { baseline_results: { easy, medium, hard },
+                     summary: { easy_score, medium_score, hard_score,
+                                average_score } }
+
+5.2 WebSocket Endpoint
+
+    WS  /ws
+         Follows OpenEnv WebSocket protocol:
+           Client sends { type: "reset", ... }  → receives Observation
+           Client sends { type: "step", action: {...} } → receives Observation
+           Server sends done=true when episode ends.
+
+5.3 Gradio UI
+
+    GET  /web
+         Mounted via gr.mount_gradio_app(app, demo, path="/web").
+         Interactive interface for manual ticket exploration.
+
+================================================================================
+6. DATA MODELS (Pydantic v2)
+================================================================================
+
+6.1 SupportAction (extends Action)
+    Fields:
+      action_type : Literal["classify","respond","escalate",
+                            "request_info","resolve"]
+      content     : str
+      confidence  : Optional[float]  (0.0–1.0)
+
+6.2 SupportObservation (extends Observation)
+    Fields:
+      ticket_id, ticket_text, ticket_subject, customer_name   : str
+      interaction_history  : List[Dict[str, str]]
+      customer_sentiment   : float  [-1.0, 1.0]
+      current_classification : Optional[str]
+      is_classified, is_escalated : bool
+      task_difficulty       : Literal["easy","medium","hard"]
+      steps_remaining, max_steps : int
+      message               : str
+      available_actions     : List[str]
+    Inherited:
+      done   : bool
+      reward : Optional[float]
+
+6.3 SupportState (extends State)
+    Fields:
+      target_category, target_resolution : str
+      requires_escalation                : bool
+      task_id, task_difficulty            : str
+      max_steps                          : int
+      classification_correct             : bool
+      response_quality_score             : float
+      escalation_correct                 : bool
+      resolved                           : bool
+      total_reward                       : float
+    Inherited:
+      episode_id : Optional[str]
+      step_count : int
+
+================================================================================
+7. CONFIGURATION SYSTEM
+================================================================================
+
+Configuration is managed by pydantic-settings (config.py).
+All values have sensible defaults and can be overridden via:
+  1. .env file  (loaded automatically)
+  2. System environment variables  (higher priority)
+
+Category            Key                      Default                Type
+──────────────────  ───────────────────────  ─────────────────────  ──────
+Server              HOST                     0.0.0.0                str
+                    PORT                     7860                   int
+                    WORKERS                  1                      int
+                    DEBUG                    False                  bool
+                    LOG_LEVEL                info                   str
+                    ENVIRONMENT              production             str
+
+Environment         MAX_CONCURRENT_ENVS      100                    int
+                    DEFAULT_SEED             42                     int
+
+OpenAI (optional)   OPENAI_API_KEY           None                   str?
+                    OPENAI_MODEL             gpt-3.5-turbo          str
+                    OPENAI_TEMPERATURE       0.3                    float
+                    OPENAI_MAX_TOKENS        200                    int
+
+HuggingFace         HF_TOKEN                 None                   str?
+                    HF_SPACE_URL             None                   str?
+                    HF_SPACE_ID              None                   str?
+
+Grading             GRADING_STRICT_MODE      True                   bool
+                    GRADING_VERBOSE          False                  bool
+
+Baseline            BASELINE_SEEDS           42,123,456             str
+                    BASELINE_OUTPUT_PATH     baseline/results.json  str
+                    BASELINE_VERBOSE         False                  bool
+
+Logging             LOG_FORMAT               json                   str
+                    LOG_FILE                 logs/support_env.log   str
+                    ENABLE_FILE_LOGGING      False                  bool
+
+Security            API_SECRET_KEY           None                   str?
+                    CORS_ORIGINS             *                      str
+
+Rate Limiting       RATE_LIMIT_ENABLED       False                  bool
+                    RATE_LIMIT_REQUESTS      100                    int
+                    RATE_LIMIT_WINDOW        60 (seconds)           int
+
+================================================================================
+8. DOCKER DEPLOYMENT
+================================================================================
+
+8.1 Dockerfile Location
+    server/Dockerfile
+
+8.2 Build & Run
+
+    # Build image
+    docker build -t support-env:latest -f server/Dockerfile .
+
+    # Run container
+    docker run -p 7860:7860 support-env:latest
+
+    # Verify
+    curl http://localhost:7860/health
+
+8.3 Environment Variables in Container
+    Pass via -e flags or --env-file:
+    docker run -p 7860:7860 --env-file .env support-env:latest
+
+================================================================================
+9. TESTING STRATEGY
+================================================================================
+
+9.1 Test Pyramid
+
+    Layer               Location                      Tool
+    ──────────────────  ────────────────────────────  ──────────────
+    Unit Tests          tests/test_environment.py      pytest
+                        tests/test_graders.py          pytest
+    Integration Tests   tests/test_api.py              pytest-asyncio
+    Baseline Regress.   tests/test_baseline.py         pytest
+
+9.2 Running Tests
+
+    # All tests
+    pytest tests/ -v
+
+    # Specific file
+    pytest tests/test_graders.py -v
+
+    # With coverage
+    pytest tests/ --cov=server --cov-report=term-missing
+
+9.3 Key Test Cases (existing — 7 KB + 7.5 KB)
+
+    test_environment.py:
+      - test_reset_returns_valid_observation
+      - test_step_classify_correct
+      - test_step_classify_wrong
+      - test_step_respond
+      - test_step_escalate_required
+      - test_step_escalate_not_required
+      - test_step_resolve
+      - test_episode_done_on_resolve
+      - test_max_steps_terminates
+      - test_seed_reproducibility
+
+    test_graders.py:
+      - test_grade_perfect_episode
+      - test_grade_minimal_episode
+      - test_grade_wrong_classification
+      - test_grade_missed_escalation
+      - test_grade_determinism (same inputs → same score)
+      - test_weights_by_difficulty
+
+================================================================================
+10. OPENENV COMPATIBILITY
+================================================================================
+
+10.1 Manifest: openenv.yaml
+     Defines: name, version, tags, config (action space, observation space),
+     grading weights, baseline expected scores.
+
+10.2 Required Interfaces Implemented
+     ✓  Environment.reset()         → SupportObservation
+     ✓  Environment.step(action)    → SupportObservation
+     ✓  Environment.state           → SupportState
+     ✓  /tasks endpoint             → task list with schemas
+     ✓  /grader endpoint            → deterministic scoring
+     ✓  /baseline endpoint          → reference agent results
+     ✓  /health endpoint            → 200 health check
+
+10.3 Validation
+     Run:  openenv validate
+     Expected:  All checks pass.
+
+================================================================================
+11. SECURITY CONSIDERATIONS
+================================================================================
+
+11.1 API Authentication
+     - Optional API_SECRET_KEY for bearer-token auth.
+     - When set, all endpoints require Authorization header.
+
+11.2 CORS
+     - Default: allow all origins (*).
+     - Production: set CORS_ORIGINS to specific domains.
+
+11.3 Rate Limiting
+     - Disabled by default.
+     - Enable via RATE_LIMIT_ENABLED=True.
+     - Configurable window (default 60 s) and limit (default 100 req).
+
+11.4 Input Validation
+     - All inputs validated through Pydantic v2 models.
+     - action_type restricted via Literal type.
+     - confidence bounded [0.0, 1.0] via Field(ge=0.0, le=1.0).
+     - customer_sentiment bounded [-1.0, 1.0].
+
+================================================================================
+12. PERFORMANCE & SCALABILITY
+================================================================================
+
+12.1 Concurrency
+     - SupportEnvironment.SUPPORTS_CONCURRENT_SESSIONS = True
+     - In-memory session store (dict) for HTTP endpoints.
+     - MAX_CONCURRENT_ENVS = 100 (configurable).
+
+12.2 Latency Budget (single episode)
+     Operation        Target
+     ──────────────   ──────
+     reset()          < 10 ms
+     step()           < 20 ms
+     grade_episode()  < 30 ms
+     Full episode     < 500 ms
+
+12.3 Memory
+     - Each session: ~50 KB (ticket + history + state).
+     - 100 sessions: ~5 MB total.
+     - No persistent storage required.
+
+================================================================================
+13. DEPENDENCY MANAGEMENT
+================================================================================
+
+13.1 Core Dependencies (pyproject.toml)
+     fastapi >= 0.100.0      pydantic >= 2.0.0
+     uvicorn[standard]       websockets >= 11.0
+     openenv-core >= 0.1.0   gradio >= 4.0.0
+     requests >= 2.31.0      pydantic-settings >= 2.0.0
+     python-dotenv >= 1.0.0  httpx >= 0.24.0
+     openai >= 1.0.0         pytest / pytest-asyncio
+
+13.2 Optional Dependency Groups
+     [dev]  — black, ruff, pytest
+     [llm]  — openai >= 1.0.0
+
+13.3 Installation
+     pip install -e .            # Editable install
+     pip install -e ".[dev]"     # With dev tools
+     uv pip install -e .         # Using uv (faster)
+
+================================================================================
+14. CI / CD PIPELINE (Recommended)
+================================================================================
+
+    ┌──────────┐     ┌──────────┐     ┌───────────┐     ┌──────────┐
+    │  Lint    │────▶│  Test    │────▶│  Build    │────▶│  Deploy  │
+    │ (ruff)   │     │ (pytest) │     │ (Docker)  │     │ (HF)     │
+    └──────────┘     └──────────┘     └───────────┘     └──────────┘
+
+    Step 1: ruff check . && black --check .
+    Step 2: pytest tests/ -v
+    Step 3: openenv validate
+    Step 4: docker build -t support-env:latest -f server/Dockerfile .
+    Step 5: openenv push --repo-id username/support-env
+
+================================================================================
+15. KNOWN LIMITATIONS & TECHNICAL DEBT
+================================================================================
+
+ID     Item                                     Severity   Status
+─────  ────────────────────────────────────────  ─────────  ──────
+TD-01  server/tasks.py is empty placeholder      Low        Open
+TD-02  server/utils.py is empty placeholder      Low        Open
+TD-03  tests/test_api.py is empty placeholder    Medium     Open
+TD-04  tests/test_baseline.py is empty           Medium     Open
+TD-05  Session store is in-memory only           Medium     Open
+TD-06  No auth middleware implemented yet        Medium     Open
+TD-07  uuid import missing in app.py (L275)      Low        Open
+       (imported late, should be at top)
+
+================================================================================
+16. MONITORING & OBSERVABILITY
+================================================================================
+
+16.1 Logging
+     - LOG_FORMAT: "json" (structured) or "text" (human-readable).
+     - ENABLE_FILE_LOGGING: writes to LOG_FILE path.
+     - LOG_LEVEL: debug / info / warning / error.
+
+16.2 Health Check
+     GET /health → { "status": "healthy" }
+     Use for Docker HEALTHCHECK and load balancer probes.
+
+16.3 Metrics (Future)
+     - Prometheus /metrics endpoint (planned).
+     - Track: active_sessions, episodes_completed, avg_score,
+       avg_latency, error_rate.
+
+================================================================================
+17. GLOSSARY
+================================================================================
+
+Term                Definition
+──────────────────  ──────────────────────────────────────────────────────
+Episode             A single support-ticket interaction from reset to done
+Action              Agent's decision at each step
+Observation         Environment response (ticket info + feedback)
+State               Internal ground-truth data (hidden from agent)
+Grading             Post-episode deterministic scoring (0.0–1.0)
+Reward              Per-step signal guiding agent learning
+Baseline            Reference rule-based agent for benchmarking
+OpenEnv             Open standard for RL environment hosting
+Seed                Integer for reproducible random generation
+
+================================================================================
+                              END OF TRD
+================================================================================
