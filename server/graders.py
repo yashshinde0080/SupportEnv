@@ -108,6 +108,10 @@ class SupportGrader:
             for key in breakdown
         )
         
+        # Apply action ordering penalty
+        ordering_penalty = self._grade_action_ordering(action_history)
+        total_score += ordering_penalty
+        
         # Ensure score is in valid range
         total_score = max(0.0, min(1.0, total_score))
         
@@ -123,6 +127,31 @@ class SupportGrader:
             feedback=feedback,
             passed=passed
         )
+        
+    def _grade_action_ordering(self, action_history: List[Dict[str, Any]]) -> float:
+        """Penalize if resolution or escalation happens before classification."""
+        idx_classify = -1
+        idx_resolve_or_escalate = -1
+        for i, a in enumerate(action_history):
+            t = a.get("type")
+            if t == "classify" and idx_classify == -1:
+                idx_classify = i
+            elif t in ["escalate", "resolve"] and idx_resolve_or_escalate == -1:
+                idx_resolve_or_escalate = i
+                
+        if idx_resolve_or_escalate != -1:
+            if idx_classify == -1 or idx_resolve_or_escalate < idx_classify:
+                return -0.25 # Penalty
+        return 0.0
+        
+    def _get_model(self):
+        if not hasattr(self, '_model') or self._model is None:
+            try:
+                from sentence_transformers import SentenceTransformer
+                self._model = SentenceTransformer('all-MiniLM-L6-v2')
+            except ImportError:
+                self._model = None
+        return self._model
     
     def _grade_classification(
         self, 
@@ -278,7 +307,18 @@ class SupportGrader:
         resolution_content = resolutions[-1].get("content", "").lower()
         expected_lower = expected_resolution.lower()
         
-        # Check for key terms overlap
+        model = self._get_model()
+        if model is not None:
+            try:
+                from sentence_transformers import util
+                emb1 = model.encode(resolution_content)
+                emb2 = model.encode(expected_lower)
+                sim = float(util.cos_sim(emb1, emb2)[0][0])
+                return min(1.0, max(0.0, sim))
+            except Exception:
+                pass
+                
+        # Fallback to key terms overlap
         expected_terms = set(expected_lower.split())
         resolution_terms = set(resolution_content.split())
         

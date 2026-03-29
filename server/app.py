@@ -22,6 +22,8 @@ import json
 import asyncio
 import traceback
 import sys
+import uuid
+import time
 from pathlib import Path
 
 # Need to ensure the root project directory is in sys.path
@@ -48,8 +50,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Store environment instances for HTTP endpoints
-environments: Dict[str, SupportEnvironment] = {}
+# Store environment instances for HTTP endpoints with TTL
+environments: Dict[str, Dict[str, Any]] = {}
+SESSION_TTL_SECONDS = 3600
+
+def _cleanup_sessions():
+    now = time.time()
+    expired = [k for k, v in environments.items() if now - v["last_accessed"] > SESSION_TTL_SECONDS]
+    for k in expired:
+        del environments[k]
 
 
 class ResetRequest(BaseModel):
@@ -68,6 +77,11 @@ class StepRequest(BaseModel):
 
 class GraderRequest(BaseModel):
     session_id: str
+
+
+class CurriculumRequest(BaseModel):
+    pass_rate: float
+    avg_score: Optional[float] = None
 
 
 # Additional HTTP endpoints beyond OpenEnv standard
@@ -132,7 +146,12 @@ async def reset_environment(request: ResetRequest):
             difficulty=request.difficulty
         )
         
-        environments[session_id] = env
+        
+        _cleanup_sessions()
+        environments[session_id] = {
+            "env": env,
+            "last_accessed": time.time()
+        }
         
         return {
             "session_id": session_id,
@@ -158,7 +177,10 @@ async def step_environment(request: StepRequest):
                 detail=f"Session {request.session_id} not found. Call /reset first."
             )
         
-        env = environments[request.session_id]
+        _cleanup_sessions()
+        env_data = environments[request.session_id]
+        env_data["last_accessed"] = time.time()
+        env = env_data["env"]
         
         action = SupportAction(
             action_type=request.action_type,
@@ -189,7 +211,11 @@ async def get_state(session_id: str):
             detail=f"Session {session_id} not found."
         )
     
-    env = environments[session_id]
+    
+    _cleanup_sessions()
+    env_data = environments[session_id]
+    env_data["last_accessed"] = time.time()
+    env = env_data["env"]
     return env.state.model_dump()
 
 
@@ -204,8 +230,10 @@ async def grade_episode(request: GraderRequest):
             status_code=404,
             detail=f"Session {request.session_id} not found."
         )
-    
-    env = environments[request.session_id]
+    _cleanup_sessions()
+    env_data = environments[request.session_id]
+    env_data["last_accessed"] = time.time()
+    env = env_data["env"]
     result = env.grade_episode()
     
     return {
@@ -271,8 +299,27 @@ async def run_baseline():
     }
 
 
+@app.post("/curriculum")
+async def curriculum_endpoint(request: CurriculumRequest):
+    """
+    Curriculum endpoint to adapt difficulty.
+    Required for dynamic training.
+    """
+    if request.pass_rate > 0.8:
+        difficulty = "hard"
+    elif request.pass_rate > 0.4:
+        difficulty = "medium"
+    else:
+        difficulty = "easy"
+    
+    return {
+        "suggested_difficulty": difficulty,
+        "pass_rate": request.pass_rate
+    }
+
+
+
 # Import Gradio UI
-import uuid
 try:
     from frontend.gradio_ui import create_gradio_interface
     import gradio as gr

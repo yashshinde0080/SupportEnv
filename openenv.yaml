@@ -93,6 +93,6 @@ grading:
 baseline:
   type: rule-based
   expected_scores:
-    easy: 0.85
-    medium: 0.65
-    hard: 0.40
+    easy: 0.75
+    medium: 0.73
+    hard: 0.82

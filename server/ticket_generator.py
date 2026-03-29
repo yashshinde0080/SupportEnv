@@ -201,7 +201,9 @@ class TicketGenerator:
     
     def __init__(self, seed: int = None):
         if seed is not None:
-            random.seed(seed)
+            self._rng = random.Random(seed)
+        else:
+            self._rng = random.Random()
     
     def generate_ticket(self, difficulty: str = None, task_id: str = None) -> Dict[str, Any]:
         """
@@ -215,22 +217,22 @@ class TicketGenerator:
             Dictionary containing ticket data
         """
         if difficulty is None:
-            difficulty = random.choice(["easy", "medium", "hard"])
+            difficulty = self._rng.choice(["easy", "medium", "hard"])
         
         # Select template based on difficulty
         if difficulty == "easy":
-            template = random.choice(EASY_TICKETS)
+            template = self._rng.choice(EASY_TICKETS)
         elif difficulty == "medium":
-            template = random.choice(MEDIUM_TICKETS)
+            template = self._rng.choice(MEDIUM_TICKETS)
         else:
-            template = random.choice(HARD_TICKETS)
+            template = self._rng.choice(HARD_TICKETS)
         
         # Fill in template variables
         ticket_text = self._fill_template(template.body)
         
         return {
             "ticket_id": str(uuid.uuid4())[:8],
-            "task_id": task_id or f"{difficulty}_{random.randint(1000, 9999)}",
+            "task_id": task_id or f"{difficulty}_{self._rng.randint(1000, 9999)}",
             "subject": template.subject,
             "body": ticket_text,
             "category": template.category,
@@ -239,8 +241,9 @@ class TicketGenerator:
             "requires_escalation": template.requires_escalation,
             "difficulty": template.difficulty,
             "keywords": template.keywords,
-            "customer_name": random.choice(CUSTOMER_NAMES),
+            "customer_name": self._rng.choice(CUSTOMER_NAMES),
             "customer_email": self._generate_email(),
+            "personality": self._rng.choice(["neutral", "aggressive", "friendly", "anxious"]),
         }
     
     def _fill_template(self, template: str) -> str:
@@ -248,22 +251,22 @@ class TicketGenerator:
         replacements = {
             "{email}": self._generate_email(),
             "{old_email}": self._generate_email(),
-            "{order_id}": f"{random.randint(100000, 999999)}",
-            "{date}": f"{random.randint(1, 28)}/{random.randint(1, 12)}/2024",
-            "{date1}": f"{random.randint(1, 14)}/03/2024",
-            "{date2}": f"{random.randint(15, 28)}/03/2024",
-            "{amount}": f"{random.randint(20, 500)}.{random.randint(0, 99):02d}",
-            "{version}": f"{random.randint(2, 5)}.{random.randint(0, 9)}.{random.randint(0, 9)}",
-            "{device}": random.choice(["iPhone 14", "Samsung S23", "Pixel 7", "iPad Pro"]),
-            "{days}": str(random.randint(1, 25)),
-            "{case_id}": f"CS-{random.randint(10000, 99999)}",
-            "{address}": f"{random.randint(100, 999)} Unknown St, Some City",
-            "{year}": str(random.randint(2018, 2022)),
-            "{location}": random.choice(["Downtown", "Mall", "Airport", "Main Street"]),
-            "{name}": random.choice(["the manager", "a staff member", "the cashier"]),
-            "{attribute}": random.choice(["appearance", "accent", "disability"]),
-            "{emotion}": random.choice(["deeply upset", "horrified", "traumatized"]),
-            "{ref}": f"REF-{random.randint(1000, 9999)}",
+            "{order_id}": f"{self._rng.randint(100000, 999999)}",
+            "{date}": f"{self._rng.randint(1, 28)}/{self._rng.randint(1, 12)}/2024",
+            "{date1}": f"{self._rng.randint(1, 14)}/03/2024",
+            "{date2}": f"{self._rng.randint(15, 28)}/03/2024",
+            "{amount}": f"{self._rng.randint(20, 500)}.{self._rng.randint(0, 99):02d}",
+            "{version}": f"{self._rng.randint(2, 5)}.{self._rng.randint(0, 9)}.{self._rng.randint(0, 9)}",
+            "{device}": self._rng.choice(["iPhone 14", "Samsung S23", "Pixel 7", "iPad Pro"]),
+            "{days}": str(self._rng.randint(1, 25)),
+            "{case_id}": f"CS-{self._rng.randint(10000, 99999)}",
+            "{address}": f"{self._rng.randint(100, 999)} Unknown St, Some City",
+            "{year}": str(self._rng.randint(2018, 2022)),
+            "{location}": self._rng.choice(["Downtown", "Mall", "Airport", "Main Street"]),
+            "{name}": self._rng.choice(["the manager", "a staff member", "the cashier"]),
+            "{attribute}": self._rng.choice(["appearance", "accent", "disability"]),
+            "{emotion}": self._rng.choice(["deeply upset", "horrified", "traumatized"]),
+            "{ref}": f"REF-{self._rng.randint(1000, 9999)}",
         }
         
         result = template
@@ -275,7 +278,7 @@ class TicketGenerator:
         """Generate a random email address."""
         names = ["john", "sarah", "mike", "emma", "alex", "lisa", "david", "amy"]
         domains = ["gmail.com", "yahoo.com", "outlook.com", "email.com"]
-        return f"{random.choice(names)}{random.randint(1, 999)}@{random.choice(domains)}"
+        return f"{self._rng.choice(names)}{self._rng.randint(1, 999)}@{self._rng.choice(domains)}"
 
 
 # Task definitions for the three required tasks
@@ -290,11 +293,6 @@ TASK_DEFINITIONS = {
             "must_classify": True,
             "must_respond": True,
             "correct_category": True,
-        },
-        "grading_weights": {
-            "classification": 0.3,
-            "response_quality": 0.5,
-            "efficiency": 0.2,
         }
     },
     "medium": {
@@ -308,12 +306,6 @@ TASK_DEFINITIONS = {
             "must_respond": True,
             "correct_category": True,
             "appropriate_follow_up": True,
-        },
-        "grading_weights": {
-            "classification": 0.25,
-            "response_quality": 0.35,
-            "reasoning": 0.25,
-            "efficiency": 0.15,
         }
     },
     "hard": {
@@ -327,12 +319,6 @@ TASK_DEFINITIONS = {
             "correct_escalation_decision": True,
             "appropriate_tone": True,
             "de_escalation_attempted": True,
-        },
-        "grading_weights": {
-            "classification": 0.15,
-            "escalation_decision": 0.35,
-            "response_quality": 0.25,
-            "tone_management": 0.25,
         }
     }
 }

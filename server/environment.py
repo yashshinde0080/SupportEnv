@@ -41,6 +41,7 @@ class SupportEnvironment(Environment):
         self._ticket_generator = TicketGenerator()
         self._reward_engine = RewardEngine()
         self._grader = SupportGrader()
+        self._rng = random.Random()
         
         # Current episode data
         self._current_ticket: Dict[str, Any] = {}
@@ -75,7 +76,7 @@ class SupportEnvironment(Environment):
         """
         # Set seed for reproducibility
         if seed is not None:
-            random.seed(seed)
+            self._rng = random.Random(seed)
             self._ticket_generator = TicketGenerator(seed=seed)
         
         # Reset reward engine
@@ -83,7 +84,7 @@ class SupportEnvironment(Environment):
         
         # Determine difficulty
         if difficulty is None:
-            difficulty = random.choice(["easy", "medium", "hard"])
+            difficulty = self._rng.choice(["easy", "medium", "hard"])
         
         # Generate ticket
         self._current_ticket = self._ticket_generator.generate_ticket(
@@ -272,13 +273,7 @@ class SupportEnvironment(Environment):
             "content": response
         })
         
-        # Simulate customer response (simple)
-        if self._current_ticket["sentiment"] < -0.5:
-            customer_reply = "I need this resolved properly."
-        elif self._current_ticket["sentiment"] < 0:
-            customer_reply = "Okay, I'm waiting for the resolution."
-        else:
-            customer_reply = "Thank you for your help."
+        customer_reply = self._generate_customer_reply(response)
         
         self._interaction_history.append({
             "role": "customer",
@@ -286,6 +281,41 @@ class SupportEnvironment(Environment):
         })
         
         return f"Response sent to customer. Customer replied: '{customer_reply}'"
+        
+    def _generate_customer_reply(self, response: str) -> str:
+        """Dynamic customer reply based on ticket sentiment, personality, and agent response."""
+        sentiment = self._current_ticket["sentiment"]
+        personality = self._current_ticket.get("personality", "neutral")
+        
+        response_lower = response.lower()
+        has_empathy = any(kw in response_lower for kw in ["understand", "sorry", "apologize", "help", "thank"])
+        has_solution = any(kw in response_lower for kw in ["here's", "you can", "resolved", "fixed", "processed", "please try"])
+        
+        if has_empathy and has_solution:
+            sentiment += 0.3
+        elif has_empathy:
+            sentiment += 0.1
+        elif not has_solution:
+            sentiment -= 0.2
+            
+        self._current_ticket["sentiment"] = max(-1.0, min(1.0, sentiment))
+        
+        if sentiment < -0.5:
+            if personality == "aggressive":
+                return "This is unacceptable. I need a real solution IMMEDIATELY or I'm escalating this."
+            elif personality == "anxious":
+                return "I'm panicking! I really need this fixed, what's taking so long?"
+            return "I am still very unhappy with this. Please fix it now."
+        elif sentiment < 0:
+            if personality == "anxious":
+                return "Oh no, I'm really worried this won't get fixed. Are you sure?"
+            return "Okay, I'm waiting for the resolution. Please hurry."
+        elif sentiment < 0.5:
+            return "Okay, I understand. Let's see if this works."
+        else:
+            if personality == "friendly":
+                return "Oh perfect! Thank you so much for your wonderful help!"
+            return "Thank you for your help. That resolves my issue."
     
     def _handle_escalate(self, reason: str) -> str:
         """Handle escalation action."""

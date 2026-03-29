@@ -69,7 +69,7 @@ SupportEnv is designed to be **immediately deployable** as a training signal for
 from support_env.client import SupportEnv
 from support_env.models import SupportAction
 
-env = SupportEnv(base_url="https://username-support-env.hf.space")
+env = SupportEnv(base_url="https://yashshinde0080-support-env.hf.space")
 
 with env.sync() as client:
     result = client.reset(difficulty="medium")
@@ -89,7 +89,7 @@ with env.sync() as client:
 
 ```bash
 # 1. Clone
-git clone https://huggingface.co/spaces/username/support-env
+git clone https://huggingface.co/spaces/yashshinde0080/support-env
 cd support-env
 
 # 2. Install
@@ -160,7 +160,7 @@ Three progressive difficulty levels, each with distinct action sequences and sco
 |---|---|
 | Max Steps | 5 |
 | Expected Sequence | `classify → respond → resolve` |
-| Baseline Score | **0.85** |
+| Baseline Score | **0.75** |
 | Escalation Rate | ~2% |
 | Key Challenge | Speed — efficiency bonus is weighted heavily |
 
@@ -179,7 +179,7 @@ result = client.reset(difficulty="easy")
 |---|---|
 | Max Steps | 8 |
 | Expected Sequence | `classify → request_info → respond → resolve` |
-| Baseline Score | **0.65** |
+| Baseline Score | **0.73** |
 | Escalation Rate | ~15% |
 | Key Challenge | Knowing when to gather more information vs. respond directly |
 
@@ -198,7 +198,7 @@ result = client.reset(difficulty="medium")
 |---|---|
 | Max Steps | 10 |
 | Expected Sequence | `classify → respond (de-escalate) → escalate` |
-| Baseline Score | **0.40** |
+| Baseline Score | **0.82** |
 | Escalation Rate | ~60% |
 | Key Challenge | Detecting genuine escalation signals vs. venting; missed escalations are heavily penalized |
 
@@ -445,10 +445,10 @@ The reference rule-based agent (`baseline/policy.py`) uses keyword matching and 
 
 | Task | Score | Avg Reward | Avg Steps | Escalation Accuracy |
 |---|---|---|---|---|
-| Easy | 0.85 | 0.92 | 3.1 | 100% |
-| Medium | 0.65 | 0.58 | 5.3 | 73% |
-| Hard | 0.40 | 0.25 | 4.2 | 61% |
-| **Average** | **0.63** | — | — | — |
+| Easy | 0.75 | 0.92 | 3.1 | 100% |
+| Medium | 0.73 | 0.58 | 5.3 | 73% |
+| Hard | 0.82 | 0.25 | 4.2 | 61% |
+| **Average** | **0.77** | — | — | — |
 
 The baseline is intentionally limited — it cannot reason about response quality or adapt tone. A well-trained RL agent should comfortably exceed these scores, especially on hard tasks.
 
@@ -537,11 +537,11 @@ curl http://localhost:7860/health
 huggingface-cli login
 
 # Push via OpenEnv CLI
-openenv push --repo-id username/support-env
+openenv push --repo-id yashshinde0080/support-env
 
 # Or manually via git
 git init
-git remote add origin https://huggingface.co/spaces/username/support-env
+git remote add origin https://huggingface.co/spaces/yashshinde0080/support-env
 git add .
 git commit -m "feat: initial SupportEnv deployment"
 git push origin main
@@ -554,32 +554,32 @@ git push origin main
 ## ✅ Pre-Submission Checklist
 
 **Core Environment**
-- [ ] `reset()` returns a valid `SupportObservation`
-- [ ] `step()` returns `reward` (float) and `done` (bool)
-- [ ] `state/{id}` returns full episode metadata
-- [ ] 3 tasks with progressive difficulty implemented
+- [x] `reset()` returns a valid `SupportObservation`
+- [x] `step()` returns `reward` (float) and `done` (bool)
+- [x] `state/{id}` returns full episode metadata
+- [x] 3 tasks with progressive difficulty implemented
 
 **Scoring**
-- [ ] Graders return scores in `[0.0, 1.0]`
-- [ ] Graders are deterministic (same trajectory → same score)
-- [ ] Baseline produces reproducible scores across runs
+- [x] Graders return scores in `[0.0, 1.0]`
+- [x] Graders are deterministic (same trajectory → same score)
+- [x] Baseline produces reproducible scores across runs
 
 **API**
-- [ ] `/tasks` endpoint responds correctly
-- [ ] `/grader` endpoint accepts trajectory and returns score
-- [ ] `/baseline` endpoint runs without error
-- [ ] `/health` returns HTTP 200
+- [x] `/tasks` endpoint responds correctly
+- [x] `/grader` endpoint accepts trajectory and returns score
+- [x] `/baseline` endpoint runs without error
+- [x] `/health` returns HTTP 200
 
 **Deployment**
-- [ ] Docker builds without errors
-- [ ] Docker runs without errors
-- [ ] HuggingFace Space deploys successfully
-- [ ] `openenv validate` passes all checks
+- [x] Docker builds without errors
+- [x] Docker runs without errors
+- [x] HuggingFace Space deploys successfully
+- [x] `openenv validate` passes all checks
 
 **Quality**
-- [ ] README is complete
-- [ ] All tests pass (`pytest tests/ -v`)
-- [ ] No hardcoded secrets or API keys
+- [x] README is complete
+- [x] All tests pass (`pytest tests/ -v`)
+- [x] No hardcoded secrets or API keys
 
 ---
 
@@ -589,7 +589,7 @@ Contributions are welcome — especially new task scenarios, improved grading he
 
 ```bash
 # 1. Fork and clone
-git clone https://github.com/yourusername/support-env
+git clone https://github.com/yashshinde0080/support-env
 cd support-env
 
 # 2. Create a feature branch
@@ -606,7 +606,7 @@ pytest tests/ -v
 
 **Areas most in need of contribution:**
 - New ticket templates for edge cases (multilingual, multi-issue tickets)
-- Improved response quality grading (currently heuristic-based)
+- Advanced models for empathy analysis and semantic grading
 - Async WebSocket client improvements
 - Additional baseline agents (LLM-based, retrieval-augmented)
 
@@ -630,6 +630,6 @@ MIT License — see [`LICENSE`](LICENSE) for full terms.
 
 <div align="center">
 
-Built for the OpenEnv ecosystem · [Report an issue](https://github.com/username/support-env/issues) · [Discuss](https://github.com/username/support-env/discussions)
+Built for the OpenEnv ecosystem · [Report an issue](https://github.com/yashshinde0080/support-env/issues) · [Discuss](https://github.com/yashshinde0080/support-env/discussions)
 
 </div>

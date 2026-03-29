@@ -151,11 +151,6 @@ class RewardEngine:
                 breakdown.penalty += -0.05
                 breakdown.reason += "Unnecessary info request. "
         
-        # Efficiency bonus
-        if is_resolved and step_count < max_steps // 2:
-            breakdown.efficiency_reward = self.EFFICIENCY_BONUS
-            breakdown.reason += "Efficient resolution. "
-        
         # Step penalty for taking too long
         if step_count > max_steps * 0.7:
             breakdown.penalty += self.TOO_MANY_STEPS
@@ -187,10 +182,10 @@ class RewardEngine:
         
         # Partial credit for related categories
         related_categories = {
-            "billing": ["payment", "refund", "charge"],
-            "technical": ["bug", "error", "issue"],
-            "account": ["login", "password", "profile"],
-            "general": ["question", "info", "other"]
+            "billing": ["payment", "charge", "refund", "invoice"],
+            "technical": ["bug", "error", "crash", "issue"],
+            "account": ["login", "password", "access", "profile"],
+            "general": ["question", "info", "inquiry", "other"]
         }
         
         for category, related in related_categories.items():

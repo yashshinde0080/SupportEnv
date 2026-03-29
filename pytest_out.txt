@@ -1,0 +1,101 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.2, pluggy-1.6.0
+rootdir: D:\Projects\SupportEnv
+configfile: pyproject.toml
+plugins: anyio-4.13.0, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 9 items / 3 errors
+
+=================================== ERRORS ====================================
+_____________________ ERROR collecting tests/test_api.py ______________________
+ImportError while importing test module 'D:\Projects\SupportEnv\tests\test_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\Admin\AppData\Local\Programs\Python\Python311\Lib\importlib\__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_api.py:2: in <module>
+    from fastapi.testclient import TestClient
+.venv\Lib\site-packages\fastapi\__init__.py:7: in <module>
+    from .applications import FastAPI as FastAPI
+.venv\Lib\site-packages\fastapi\applications.py:6: in <module>
+    from fastapi import routing
+.venv\Lib\site-packages\fastapi\routing.py:35: in <module>
+    from fastapi import params
+.venv\Lib\site-packages\fastapi\params.py:7: in <module>
+    from fastapi.exceptions import FastAPIDeprecationWarning
+.venv\Lib\site-packages\fastapi\exceptions.py:5: in <module>
+    from pydantic import BaseModel, create_model
+.venv\Lib\site-packages\pydantic\__init__.py:5: in <module>
+    from ._migration import getattr_migration
+.venv\Lib\site-packages\pydantic\_migration.py:4: in <module>
+    from pydantic.warnings import PydanticDeprecatedSince20
+.venv\Lib\site-packages\pydantic\warnings.py:5: in <module>
+    from .version import version_short
+.venv\Lib\site-packages\pydantic\version.py:7: in <module>
+    from pydantic_core import __version__ as __pydantic_core_version__
+.venv\Lib\site-packages\pydantic_core\__init__.py:8: in <module>
+    from ._pydantic_core import (
+E   ModuleNotFoundError: No module named 'pydantic_core._pydantic_core'
+___________________ ERROR collecting tests/test_baseline.py ___________________
+ImportError while importing test module 'D:\Projects\SupportEnv\tests\test_baseline.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\Admin\AppData\Local\Programs\Python\Python311\Lib\importlib\__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_baseline.py:2: in <module>
+    from baseline.policy import BaselinePolicy
+baseline\policy.py:14: in <module>
+    from models import SupportAction, SupportObservation
+models.py:7: in <module>
+    from pydantic import Field
+.venv\Lib\site-packages\pydantic\__init__.py:5: in <module>
+    from ._migration import getattr_migration
+.venv\Lib\site-packages\pydantic\_migration.py:4: in <module>
+    from pydantic.warnings import PydanticDeprecatedSince20
+.venv\Lib\site-packages\pydantic\warnings.py:5: in <module>
+    from .version import version_short
+.venv\Lib\site-packages\pydantic\version.py:7: in <module>
+    from pydantic_core import __version__ as __pydantic_core_version__
+.venv\Lib\site-packages\pydantic_core\__init__.py:8: in <module>
+    from ._pydantic_core import (
+E   ModuleNotFoundError: No module named 'pydantic_core._pydantic_core'
+_________________ ERROR collecting tests/test_environment.py __________________
+ImportError while importing test module 'D:\Projects\SupportEnv\tests\test_environment.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\Admin\AppData\Local\Programs\Python\Python311\Lib\importlib\__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_environment.py:6: in <module>
+    from server.environment import SupportEnvironment
+server\environment.py:14: in <module>
+    from openenv.core.env_server import Environment
+.venv\Lib\site-packages\openenv\core\__init__.py:14: in <module>
+    from . import env_server
+.venv\Lib\site-packages\openenv\core\env_server\__init__.py:9: in <module>
+    from .base_transforms import CompositeTransform, NullTransform
+.venv\Lib\site-packages\openenv\core\env_server\base_transforms.py:9: in <module>
+    from .interfaces import Transform
+.venv\Lib\site-packages\openenv\core\env_server\interfaces.py:11: in <module>
+    from .types import Action, EnvironmentMetadata, Observation, State
+.venv\Lib\site-packages\openenv\core\env_server\types.py:10: in <module>
+    from pydantic import BaseModel, ConfigDict, Field, model_validator
+.venv\Lib\site-packages\pydantic\__init__.py:5: in <module>
+    from ._migration import getattr_migration
+.venv\Lib\site-packages\pydantic\_migration.py:4: in <module>
+    from pydantic.warnings import PydanticDeprecatedSince20
+.venv\Lib\site-packages\pydantic\warnings.py:5: in <module>
+    from .version import version_short
+.venv\Lib\site-packages\pydantic\version.py:7: in <module>
+    from pydantic_core import __version__ as __pydantic_core_version__
+.venv\Lib\site-packages\pydantic_core\__init__.py:8: in <module>
+    from ._pydantic_core import (
+E   ModuleNotFoundError: No module named 'pydantic_core._pydantic_core'
+=========================== short test summary info ===========================
+ERROR tests/test_api.py
+ERROR tests/test_baseline.py
+ERROR tests/test_environment.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 3 errors during collection !!!!!!!!!!!!!!!!!!!
+============================== 3 errors in 0.48s ==============================
