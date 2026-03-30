@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server.environment import SupportEnvironment
 from baseline.policy import BaselinePolicy
 from models import SupportAction
+import litellm
 
 
 def run_baseline_episode(
@@ -179,25 +180,41 @@ def run_all_baselines(
     }
 
 
-def run_llm_baseline(api_key: str = None, verbose: bool = False) -> Dict[str, Any]:
+def run_llm_baseline(seeds: list = [42, 123, 456], verbose: bool = False) -> Dict[str, Any]:
     """
-    Run baseline using OpenAI API.
-    
-    Args:
-        api_key: OpenAI API key (or from env var)
-        verbose: Print detailed output
-        
-    Returns:
-        Baseline results
+    Run baseline using configured LLM API via litellm.
     """
-    import openai
+    from config import settings
     
-    api_key = api_key or os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY not found in environment")
+    api_key = settings.openai_api_key
+    if not api_key or "your-openai-api-key-here" in api_key:
+        print("\n" + "!"*60)
+        print("ERROR: OpenAI API key is missing or is using the placeholder.")
+        print("Please update your .env file with a valid API key.")
+        print("!"*60 + "\n")
+        return {"error": "Invalid API key"}
     
-    client = openai.OpenAI(api_key=api_key)
-    
+    # Configure litellm based on settings
+    provider = settings.generator_provider.lower()
+    if provider == "openai":
+        litellm.api_key = settings.openai_api_key
+        model = settings.openai_model
+    elif provider == "gemini":
+        litellm.api_key = settings.gemini_api_key
+        model = f"gemini/{settings.gemini_model}"
+    elif provider == "groq":
+        litellm.api_key = settings.groq_api_key
+        model = f"groq/{settings.groq_model}"
+    elif provider == "openrouter":
+        litellm.api_key = settings.openrouter_api_key
+        model = f"openrouter/{settings.openrouter_model}"
+    elif provider == "ollama":
+        model = f"ollama/{settings.ollama_model}"
+        litellm.api_base = settings.ollama_base_url
+    else:
+        model = "gpt-3.5-turbo"
+        litellm.api_key = settings.openai_api_key
+
     SYSTEM_PROMPT = """You are an expert customer support agent. Your task is to handle customer support tickets effectively.
 
 For each ticket, you must:
@@ -223,16 +240,19 @@ Respond in JSON format:
     for difficulty in ["easy", "medium", "hard"]:
         print(f"\nRunning LLM baseline on {difficulty} task...")
         
-        env = SupportEnvironment()
-        observation = env.reset(seed=42, difficulty=difficulty)
-        
-        total_reward = 0.0
-        steps = 0
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        
-        while not observation.done and steps < 10:
-            # Build user message
-            user_msg = f"""TICKET:
+        for seed in seeds:
+            if verbose:
+                print(f"  Running seed {seed}...")
+            
+            env = SupportEnvironment()
+            observation = env.reset(seed=seed, difficulty=difficulty)
+            
+            total_reward = 0.0
+            steps = 0
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            
+            while not observation.done and steps < 10:
+                user_msg = f"""TICKET:
 Subject: {observation.ticket_subject}
 Customer: {observation.customer_name}
 Sentiment: {"Angry" if observation.customer_sentiment < -0.3 else "Neutral" if observation.customer_sentiment < 0.3 else "Positive"}
@@ -247,59 +267,69 @@ Current Status:
 {observation.message}
 
 What action do you take?"""
+                
+                messages.append({"role": "user", "content": user_msg})
+                
+                try:
+                    response = litellm.completion(
+                        model=model,
+                        messages=messages,
+                        temperature=0.3,
+                        max_tokens=256,
+                        response_format={"type": "json_object"}
+                    )
+                    
+                    response_text = response.choices[0].message.content
+                    messages.append({"role": "assistant", "content": response_text})
+                    
+                    action_data = json.loads(response_text)
+                    action = SupportAction(
+                        action_type=action_data["action_type"],
+                        content=action_data["content"]
+                    )
+                    
+                except Exception as e:
+                    if verbose:
+                        print(f"    Error in LLM response: {e}")
+                    action = SupportAction(
+                        action_type="respond",
+                        content="I apologize for the delay. I am looking into your issue now."
+                    )
+                
+                observation = env.step(action)
+                total_reward += observation.reward or 0.0
+                steps += 1
             
-            messages.append({"role": "user", "content": user_msg})
-            
-            # Get LLM response
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=messages,
-                    temperature=0.3,
-                    max_tokens=200
-                )
-                
-                response_text = response.choices[0].message.content
-                messages.append({"role": "assistant", "content": response_text})
-                
-                # Parse action
-                action_data = json.loads(response_text)
-                action = SupportAction(
-                    action_type=action_data["action_type"],
-                    content=action_data["content"]
-                )
-                
-            except Exception as e:
-                if verbose:
-                    print(f"  Error parsing LLM response: {e}")
-                # Fallback to simple action
-                action = SupportAction(
-                    action_type="respond",
-                    content="I apologize for the inconvenience. Let me help you with this issue."
-                )
+            grade_result = env.grade_episode()
+            results[difficulty].append({
+                "seed": seed,
+                "score": grade_result.score,
+                "total_reward": round(total_reward, 4),
+                "steps": steps,
+                "passed": grade_result.passed,
+                "breakdown": grade_result.breakdown
+            })
             
             if verbose:
-                print(f"  Step {steps + 1}: {action.action_type}")
-            
-            # Execute action
-            observation = env.step(action)
-            total_reward += observation.reward or 0.0
-            steps += 1
-        
-        # Grade episode
-        grade_result = env.grade_episode()
-        
-        results[difficulty].append({
-            "score": grade_result.score,
-            "total_reward": round(total_reward, 4),
-            "steps": steps,
-            "passed": grade_result.passed,
-            "breakdown": grade_result.breakdown
-        })
-        
-        print(f"  Score: {grade_result.score:.4f}")
+                print(f"    Seed {seed} Score: {grade_result.score:.4f}")
     
-    return results
+    # Compute summary
+    summary = {}
+    for difficulty in ["easy", "medium", "hard"]:
+        scores = [r["score"] for r in results[difficulty]]
+        summary[difficulty] = {
+            "avg_score": round(sum(scores) / len(scores), 4),
+            "min_score": round(min(scores), 4),
+            "max_score": round(max(scores), 4),
+            "pass_rate": sum(1 for r in results[difficulty] if r["passed"]) / len(results[difficulty])
+        }
+    
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "seeds": seeds,
+        "detailed_results": results,
+        "summary": summary
+    }
 
 
 def main():

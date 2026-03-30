@@ -1,12 +1,13 @@
-"""
-Generates realistic customer support tickets for training.
-"""
-
 import random
 import uuid
-from typing import Dict, Any, List, Tuple
-from dataclasses import dataclass
+import json
+import logging
+from typing import Dict, Any, List, Tuple, Optional
+from dataclasses import dataclass, asdict
+import litellm
+from config import settings
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class TicketTemplate:
@@ -19,8 +20,7 @@ class TicketTemplate:
     difficulty: str
     keywords: List[str]
 
-
-# Easy tickets - clear category, simple resolution
+# ... [EASY_TICKETS, MEDIUM_TICKETS, HARD_TICKETS, CUSTOMER_NAMES constants remain same but I'll omit them here for brevity if they are not changed] ...
 EASY_TICKETS = [
     TicketTemplate(
         category="account",
@@ -74,7 +74,6 @@ EASY_TICKETS = [
     ),
 ]
 
-# Medium tickets - requires reasoning, multiple steps
 MEDIUM_TICKETS = [
     TicketTemplate(
         category="billing",
@@ -126,7 +125,6 @@ MEDIUM_TICKETS = [
     ),
 ]
 
-# Hard tickets - ambiguous, emotional, may require escalation
 HARD_TICKETS = [
     TicketTemplate(
         category="billing",
@@ -208,17 +206,67 @@ class TicketGenerator:
     def generate_ticket(self, difficulty: str = None, task_id: str = None) -> Dict[str, Any]:
         """
         Generate a realistic support ticket.
-        
-        Args:
-            difficulty: "easy", "medium", or "hard"
-            task_id: Optional specific task ID
-            
-        Returns:
-            Dictionary containing ticket data
         """
         if difficulty is None:
             difficulty = self._rng.choice(["easy", "medium", "hard"])
         
+        if self.use_llm:
+            try:
+                return self._generate_with_llm(difficulty, task_id)
+            except Exception as e:
+                logger.error(f"LLM ticket generation failed: {e}. Falling back to templates.")
+        
+        return self._generate_with_templates(difficulty, task_id)
+
+    def _generate_with_llm(self, difficulty: str, task_id: str = None) -> Dict[str, Any]:
+        """Generate a ticket using the configured LLM."""
+        prompt = f"""
+        Generate a realistic customer support ticket for a company.
+        Difficulty: {difficulty}
+        Provide the response in the following JSON format:
+        {{
+            "subject": "Clear and relevant subject line",
+            "body": "Detailed ticket message from the customer",
+            "category": "one of: account, billing, technical, general",
+            "sentiment": -1.0 to 1.0 (float),
+            "expected_resolution": "Description of what a good agent should do",
+            "requires_escalation": true/false,
+            "keywords": ["list", "of", "important", "keywords"]
+        }}
+        
+        Guidelines for difficulty:
+        - easy: Simple, clear request, no escalation needed.
+        - medium: Slightly complex, maybe missing info, multiple steps.
+        - hard: Angry/upset customer, complex issue, high stakes, likely needs escalation.
+        """
+        
+        response = litellm.completion(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        
+        ticket_data = json.loads(response.choices[0].message.content)
+        
+        # Add metadata
+        ticket_id = str(uuid.uuid4())[:8]
+        return {
+            "ticket_id": ticket_id,
+            "task_id": task_id or f"{difficulty}_{random.randint(1000, 9999)}",
+            "subject": ticket_data["subject"],
+            "body": ticket_data["body"],
+            "category": ticket_data["category"],
+            "sentiment": float(ticket_data["sentiment"]),
+            "expected_resolution": ticket_data["expected_resolution"],
+            "requires_escalation": bool(ticket_data["requires_escalation"]),
+            "difficulty": difficulty,
+            "keywords": ticket_data["keywords"],
+            "customer_name": random.choice(CUSTOMER_NAMES),
+            "customer_email": self._generate_email(),
+        }
+
+    def _generate_with_templates(self, difficulty: str, task_id: str = None) -> Dict[str, Any]:
+        """Generate a ticket using hardcoded templates."""
         # Select template based on difficulty
         if difficulty == "easy":
             template = self._rng.choice(EASY_TICKETS)
