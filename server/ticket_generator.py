@@ -202,6 +202,12 @@ class TicketGenerator:
             self._rng = random.Random(seed)
         else:
             self._rng = random.Random()
+        
+        # Validate LLM configuration immediately - fail fast if misconfigured
+        settings.validate_llm_config()
+        
+        self.use_llm = settings.use_llm_generator
+        self.model = settings.generator_full_model
     
     def generate_ticket(self, difficulty: str = None, task_id: str = None) -> Dict[str, Any]:
         """
@@ -211,10 +217,9 @@ class TicketGenerator:
             difficulty = self._rng.choice(["easy", "medium", "hard"])
         
         if self.use_llm:
-            try:
-                return self._generate_with_llm(difficulty, task_id)
-            except Exception as e:
-                logger.error(f"LLM ticket generation failed: {e}. Falling back to templates.")
+            # We don't catch exceptions here anymore - if LLM fails, we want to know why.
+            # This follows the principle of failing loudly instead of silent fallback.
+            return self._generate_with_llm(difficulty, task_id)
         
         return self._generate_with_templates(difficulty, task_id)
 
@@ -240,11 +245,16 @@ class TicketGenerator:
         - hard: Angry/upset customer, complex issue, high stakes, likely needs escalation.
         """
         
-        response = litellm.completion(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"}
-        )
+        completion_kwargs = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": {"type": "json_object"}
+        }
+        
+        if self.model.startswith("ollama/"):
+            completion_kwargs["api_base"] = settings.ollama_base_url
+            
+        response = litellm.completion(**completion_kwargs)
         
         ticket_data = json.loads(response.choices[0].message.content)
         
