@@ -330,18 +330,44 @@ class SupportEnvironment(Environment):
             return f"Ticket escalated to human agent. Reason: {reason}. Note: This ticket may not have required escalation."
     
     def _handle_request_info(self, info_needed: str) -> str:
-        """Handle request for information."""
+        """Handle request for information with context-aware customer responses."""
         self._interaction_history.append({
             "role": "agent",
             "content": f"Could you please provide: {info_needed}"
         })
-        
-        # Simulate customer providing info
+
+        # Generate context-aware response based on what info was requested
+        info_lower = info_needed.lower()
+        ticket_category = self._current_ticket.get("category", "general")
+        sentiment = self._current_ticket.get("sentiment", 0.0)
+
+        # Context-aware responses based on the type of information requested
+        if "order" in info_lower or "receipt" in info_lower:
+            customer_reply = f"Sure, my order number is #{self._current_ticket.get('ticket_id', '123456')}. I purchased this on {self._rng.randint(1, 28)}/03/2024."
+        elif "email" in info_lower or "account" in info_lower:
+            customer_reply = f"My email address is {self._current_ticket.get('customer_email', 'customer@email.com')}. My account was created in {self._rng.randint(2020, 2023)}."
+        elif "phone" in info_lower or "contact" in info_lower:
+            customer_reply = f"You can reach me at +1-{self._rng.randint(200, 999)}-{self._rng.randint(100, 999)}-{self._rng.randint(1000, 9999)}. I'm available 9AM-5PM."
+        elif "screenshot" in info_lower or "image" in info_lower or "photo" in info_lower:
+            customer_reply = "I've attached a screenshot showing the issue. Can you see it? The error appears when I click the submit button."
+        elif "describe" in info_lower or "explain" in info_lower or "details" in info_lower:
+            if sentiment < -0.5:
+                customer_reply = "I've already explained this! Fine, let me repeat: the problem started when I tried to complete my purchase. The payment went through but I got no confirmation."
+            else:
+                customer_reply = "Here are more details: The issue occurs consistently when I try to complete the action. I've tried multiple times with the same result."
+        elif "when" in info_lower or "time" in info_lower or "date" in info_lower:
+            customer_reply = f"This happened on {self._rng.randint(1, 28)}/03/2024 at around {self._rng.randint(8, 20)}:{self._rng.randint(0, 59):02d} PM. I noticed it immediately."
+        elif "error" in info_lower or "message" in info_lower:
+            customer_reply = f"The error message says: 'Operation failed - code {self._rng.randint(1000, 9999)}'. It appears every time I try to proceed."
+        else:
+            # Generic but still informative response
+            customer_reply = f"Here's the information about {info_needed}: I've been experiencing this issue for {self._rng.randint(1, 14)} days now and it's affecting my daily work."
+
         self._interaction_history.append({
             "role": "customer",
-            "content": f"Here is the information you requested about {info_needed}."
+            "content": customer_reply
         })
-        
+
         return f"Requested additional information: {info_needed}. Customer provided response."
     
     def _handle_resolve(self, summary: str) -> str:

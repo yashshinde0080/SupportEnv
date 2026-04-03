@@ -71,7 +71,7 @@ class SupportObservation(Observation):
 class SupportState(State):
     """
     Internal state of the environment (for debugging/monitoring).
-    
+
     Inherits from State base class which provides:
         - episode_id: Optional[str]
         - step_count: int
@@ -80,28 +80,17 @@ class SupportState(State):
     target_category: str = ""
     target_resolution: str = ""
     requires_escalation: bool = False
-    
+
     # Episode tracking
     task_id: str = ""
     task_difficulty: str = ""
     max_steps: int = 10
-    
+
     # Performance tracking
     classification_correct: bool = False
     response_quality_score: float = 0.0
     escalation_correct: bool = False
     resolved: bool = False
-    
+
     # Cumulative metrics
     total_reward: float = 0.0
-
-
-class TaskConfig:
-    """Configuration for a single task."""
-    task_id: str
-    difficulty: Literal["easy", "medium", "hard"]
-    description: str
-    max_steps: int
-    ticket_template: Dict[str, Any]
-    expected_actions: List[str]
-    grading_weights: Dict[str, float]

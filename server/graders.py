@@ -138,20 +138,11 @@ class SupportGrader:
                 idx_classify = i
             elif t in ["escalate", "resolve"] and idx_resolve_or_escalate == -1:
                 idx_resolve_or_escalate = i
-                
+
         if idx_resolve_or_escalate != -1:
             if idx_classify == -1 or idx_resolve_or_escalate < idx_classify:
                 return -0.25 # Penalty
         return 0.0
-        
-    def _get_model(self):
-        if not hasattr(self, '_model') or self._model is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-                self._model = SentenceTransformer('all-MiniLM-L6-v2')
-            except ImportError:
-                self._model = None
-        return self._model
     
     def _grade_classification(
         self, 
@@ -194,68 +185,95 @@ class SupportGrader:
         return 0.2  # Wrong classification
     
     def _grade_responses(
-        self, 
+        self,
         action_history: List[Dict[str, Any]],
         difficulty: str
     ) -> float:
-        """Grade overall response quality."""
+        """Grade overall response quality with anti-gaming measures."""
         responses = [
             a for a in action_history if a.get("type") == "respond"
         ]
-        
+
         if not responses:
             return 0.0
-        
+
         total_score = 0.0
-        
+
         for response in responses:
             content = response.get("content", "").lower()
-            
+
             # Check for positive keywords
             positive_count = sum(
                 1 for kw in self.response_quality_keywords["positive"]
                 if kw in content
             )
-            
+
             # Check for negative keywords (penalty)
             negative_count = sum(
                 1 for kw in self.response_quality_keywords["negative"]
                 if kw in content
             )
-            
+
             # Check for solution-oriented language
             solution_count = sum(
                 1 for kw in self.response_quality_keywords["solution"]
                 if kw in content
             )
-            
+
             # Response length check
             word_count = len(content.split())
             length_score = min(1.0, word_count / 20)  # At least 20 words ideal
-            
+
+            # ANTI-GAMING: Detect keyword stuffing
+            # Stuffing = many keywords in short text (high density), not just many keywords
+            total_keywords = positive_count + solution_count
+            keyword_density = total_keywords / max(word_count, 1)
+
+            # Only penalize if keyword density is suspiciously high
+            # Normal responses: ~1 keyword per 15-20 words (density ~0.05-0.07)
+            # Stuffed responses: ~1 keyword per 2-3 words (density >0.3)
+            stuffing_penalty = 0.0
+            is_stuffing = False
+
+            if keyword_density > 0.3:  # More than 1 keyword per 3 words = obvious stuffing
+                is_stuffing = True
+                stuffing_penalty = -0.5  # Severe penalty
+            elif keyword_density > 0.2:  # Moderate stuffing
+                is_stuffing = True
+                stuffing_penalty = -0.25
+
             # Compute individual response score
+            # Cap keyword contribution based on whether stuffing detected
+            if is_stuffing:
+                # Stuffed responses can't score high regardless of keyword count
+                keyword_score = min(0.3, positive_count * 0.05) + min(0.2, solution_count * 0.05)
+            else:
+                # Legitimate responses rewarded for natural keyword usage
+                keyword_score = min(0.5, positive_count * 0.12) + min(0.35, solution_count * 0.12)
+
             resp_score = (
-                min(1.0, positive_count * 0.15) +
-                min(0.4, solution_count * 0.2) +
+                keyword_score +
                 length_score * 0.3 -
-                negative_count * 0.3
+                negative_count * 0.3 +
+                stuffing_penalty
             )
-            
+
             total_score += max(0.0, min(1.0, resp_score))
-        
+
         # Average across responses
         avg_score = total_score / len(responses)
-        
+
         # Higher standards for harder difficulties
+        # This makes it genuinely harder to score well on hard tasks
         if difficulty == "hard":
-            avg_score *= 0.85  # Harder to get high score
+            avg_score *= 0.55  # Much harder to get high score
         elif difficulty == "medium":
-            avg_score *= 0.92
-        
+            avg_score *= 0.75  # Moderately harder
+
         return min(1.0, avg_score)
     
     def _grade_escalation(
-        self, 
+        self,
         action_history: List[Dict[str, Any]],
         should_escalate: bool
     ) -> float:
@@ -263,28 +281,30 @@ class SupportGrader:
         escalations = [
             a for a in action_history if a.get("type") == "escalate"
         ]
-        
+
         escalated = len(escalations) > 0
-        
+
         if should_escalate and escalated:
             # Correct: escalated when needed
-            # Check if escalation had valid reason
+            # Check if escalation had valid reason with specific details
             reason = escalations[0].get("content", "")
-            if len(reason.split()) >= 5:
+            if len(reason.split()) >= 10 and any(kw in reason.lower() for kw in ["immediate", "severity", "sensitivity", "human"]):
                 return 1.0
-            return 0.8  # Right decision but poor explanation
-            
+            elif len(reason.split()) >= 5:
+                return 0.9
+            return 0.7  # Right decision but poor explanation
+
         elif not should_escalate and not escalated:
             # Correct: did not escalate when not needed
             return 1.0
-            
+
         elif should_escalate and not escalated:
             # Wrong: should have escalated but didn't
-            return 0.1
-            
+            return 0.0  # Harsher penalty for missing required escalation
+
         else:
-            # Wrong: escalated when not needed
-            return 0.3
+            # Wrong: escalated when not needed (unnecessary escalation)
+            return 0.1  # Harsher penalty for wasting resources
     
     def _grade_resolution(
         self,
@@ -292,53 +312,70 @@ class SupportGrader:
         action_history: List[Dict[str, Any]],
         expected_resolution: str
     ) -> float:
-        """Grade resolution quality."""
+        """Grade resolution quality using deterministic keyword overlap."""
         if not is_resolved:
+            # Check if escalated (escalation counts as partial resolution)
+            escalations = [a for a in action_history if a.get("type") == "escalate"]
+            if escalations:
+                return 0.3  # Lower score for escalation-only "resolution"
             return 0.2  # Partial credit for attempting
-        
+
         # Find resolution action
         resolutions = [
             a for a in action_history if a.get("type") == "resolve"
         ]
-        
+
         if not resolutions:
-            return 0.5  # Resolved but no explicit resolution action
-        
+            return 0.2  # Lower score when no explicit resolution action
+
         resolution_content = resolutions[-1].get("content", "").lower()
         expected_lower = expected_resolution.lower()
-        
-        model = self._get_model()
-        if model is not None:
-            try:
-                from sentence_transformers import util
-                emb1 = model.encode(resolution_content)
-                emb2 = model.encode(expected_lower)
-                sim = float(util.cos_sim(emb1, emb2)[0][0])
-                return min(1.0, max(0.0, sim))
-            except Exception:
-                pass
-                
-        # Fallback to key terms overlap
-        expected_terms = set(expected_lower.split())
-        resolution_terms = set(resolution_content.split())
-        
+
+        # Extract meaningful words (filter out stopwords)
+        stopwords = {"the", "a", "an", "is", "are", "was", "were", "be", "been",
+                     "being", "have", "has", "had", "do", "does", "did", "will",
+                     "would", "could", "should", "may", "might", "must", "shall",
+                     "can", "need", "dare", "ought", "used", "to", "of", "in",
+                     "for", "on", "with", "at", "by", "from", "as", "into",
+                     "through", "during", "before", "after", "above", "below",
+                     "between", "under", "again", "further", "then", "once", "and",
+                     "but", "or", "nor", "so", "yet", "both", "either", "neither",
+                     "not", "only", "own", "same", "than", "too", "very", "just",
+                     "also", "now", "here", "there", "when", "where", "why", "how",
+                     "all", "each", "every", "both", "few", "more", "most", "other",
+                     "some", "such", "no", "any", "this", "that", "these", "those", "i", "you", "we", "they"}
+
+        expected_terms = {w for w in expected_lower.split() if w not in stopwords and len(w) > 2}
+        resolution_terms = {w for w in resolution_content.split() if w not in stopwords and len(w) > 2}
+
+        if not expected_terms:
+            return 0.5  # Can't grade if expected has no meaningful terms
+
+        # Calculate overlap
         overlap = len(expected_terms & resolution_terms)
-        overlap_ratio = overlap / max(len(expected_terms), 1)
-        
-        return min(1.0, 0.5 + overlap_ratio * 0.5)
+        overlap_ratio = overlap / len(expected_terms)
+
+        # Also check for key action words that indicate resolution
+        action_words = {"processed", "resolved", "fixed", "updated", "refunded",
+                        "cancelled", "escalated", "investigated", "completed", "sent"}
+        has_action_word = any(w in resolution_content for w in action_words)
+
+        # Score based on overlap and presence of action words
+        base_score = overlap_ratio * 0.7
+        action_bonus = 0.3 if has_action_word else 0.0
+
+        return min(1.0, base_score + action_bonus)
     
     def _grade_efficiency(self, steps: int, max_steps: int) -> float:
-        """Grade step efficiency."""
-        if steps <= max_steps // 3:
-            return 1.0  # Very efficient
-        elif steps <= max_steps // 2:
-            return 0.8
-        elif steps <= max_steps * 0.7:
-            return 0.6
-        elif steps < max_steps:
-            return 0.4
+        """Grade step efficiency using continuous scoring."""
+        # Continuous function: 1.0 at step 1, decreasing linearly to 0.2 at max_steps
+        # Formula: 1.0 - 0.8 * ((steps - 1) / (max_steps - 1))
+        if steps <= 1:
+            return 1.0
+        elif steps >= max_steps:
+            return 0.2
         else:
-            return 0.2  # Used all steps
+            return round(1.0 - 0.8 * ((steps - 1) / (max_steps - 1)), 2)
     
     def _get_weights(self, difficulty: str) -> Dict[str, float]:
         """Get grading weights based on difficulty."""

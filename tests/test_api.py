@@ -57,5 +57,10 @@ def test_grader_endpoint():
     assert "passed" in result
     
 def test_baseline_endpoint():
-    # Depending on performance, this might be slow to run in the main pipeline
-    pass
+    """Test the baseline endpoint returns valid results."""
+    response = client.post("/baseline", json={"difficulty": "easy", "seed": 42})
+    assert response.status_code == 200
+    data = response.json()
+    assert "score" in data or "result" in data or "actions" in data
+    # Baseline should return some actionable response
+    assert data is not None

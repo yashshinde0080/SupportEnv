@@ -55,9 +55,9 @@ support-env = "server.app:main"
 server = "server.app:main"
 
 [project.urls]
-Homepage = "https://huggingface.co/spaces/username/support-env"
-Documentation = "https://github.com/username/support-env"
-Repository = "https://github.com/username/support-env"
+Homepage = "https://huggingface.co/spaces/yashshinde0080/support-env"
+Documentation = "https://github.com/yashshinde0080/SupportEnv"
+Repository = "https://github.com/yashshinde0080/SupportEnv"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]

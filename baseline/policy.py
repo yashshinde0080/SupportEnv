@@ -25,13 +25,17 @@ class BaselinePolicy:
     """
     
     CATEGORY_KEYWORDS = {
-        "billing": ["payment", "charge", "refund", "invoice", "subscription", 
-                   "price", "cost", "money", "fee", "bill", "receipt"],
-        "technical": ["error", "bug", "crash", "not working", "broken", 
-                     "update", "app", "load", "slow", "freeze"],
-        "account": ["password", "login", "account", "access", "email", 
-                   "profile", "username", "reset", "locked"],
-        "general": ["question", "information", "hours", "location", "help"]
+        "billing": ["payment", "charge", "refund", "invoice", "subscription",
+                   "price", "cost", "money", "fee", "bill", "receipt", "charged",
+                   "double", "twice", "cancel", "plan", "premium"],
+        "technical": ["error", "bug", "crash", "not working", "broken",
+                     "update", "app", "load", "slow", "freeze", "search",
+                     "connection", "feature", "download", "sync", "export"],
+        "account": ["password", "login", "account", "access", "email",
+                   "profile", "username", "reset", "locked", "delete",
+                   "2fa", "merge", "duplicate", "address", "update"],
+        "general": ["question", "information", "hours", "location", "help",
+                   "store", "visit", "weekend", "available", "product", "receipt"]
     }
     
     ESCALATION_KEYWORDS = [
@@ -126,15 +130,18 @@ class BaselinePolicy:
     
     def _should_escalate(self, text: str, sentiment: float) -> bool:
         """Determine if ticket should be escalated."""
-        # Escalate for very negative sentiment
-        if sentiment < -0.7:
+        # Escalate only for extremely negative sentiment (hard tickets)
+        if sentiment < -0.8:
             return True
-        
-        # Escalate for specific keywords
-        for keyword in self.ESCALATION_KEYWORDS:
+
+        # Escalate only for severe keywords (legal/fraud threats, not just frustration)
+        severe_keywords = ["lawyer", "legal", "fraud", "stolen", "sue",
+                          "discrimination", "authorities", "media", "class action",
+                          "hacked", "identity", "breach", "suicide", "bankruptcy", "FDA"]
+        for keyword in severe_keywords:
             if keyword in text:
                 return True
-        
+
         return False
     
     def _generate_response(self, category: str, ticket_text: str) -> str:

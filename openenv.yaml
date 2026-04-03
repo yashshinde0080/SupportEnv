@@ -9,7 +9,7 @@ description: |
   to customers, and make escalation decisions.
 
 # Environment metadata
-author: "Your Name"
+author: "Yash Shinde"
 license: "MIT"
 repository: "https://huggingface.co/spaces/yashshinde/SupportEnv"
 documentation: "https://github.com/yashshinde/SupportEnv/blob/main/README.md"
@@ -34,6 +34,15 @@ config:
   defaults:
     max_steps: 10
     seed: 42
+
+  # Difficulty-specific settings
+  difficulty_settings:
+    easy:
+      max_steps: 5
+    medium:
+      max_steps: 8
+    hard:
+      max_steps: 12  # Increased to make efficiency harder to achieve
   
   # Action space
   action_space:
@@ -93,6 +102,6 @@ grading:
 baseline:
   type: rule-based
   expected_scores:
-    easy: 0.75
-    medium: 0.73
-    hard: 0.82
+    easy: 0.80
+    medium: 0.65
+    hard: 0.45  # Hard should be genuinely challenging

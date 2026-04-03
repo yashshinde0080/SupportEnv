@@ -161,27 +161,40 @@ def validate_action_for_type(action_type: str, content: str) -> Tuple[bool, str]
 # Environment Interaction Functions
 # ─────────────────────────────────────────────────────────────────────────────
 
-def reset_environment(difficulty: str, seed: int = None) -> Tuple[str, str, str, str, str, str, str]:
+# Global state
+current_session_id = None
+cumulative_reward = 0.0
+step_count = 0
+reward_history = []
+
+def reset_environment(difficulty: str, seed: int = None) -> Tuple[str, str, str, str, str, str]:
     """Reset environment and return initial state with full validation."""
+    global current_session_id, cumulative_reward, step_count, reward_history
     try:
+        # Reset state
+        cumulative_reward = 0.0
+        step_count = 0
+        reward_history = []
+
         # Validate inputs
         is_valid, msg = validate_difficulty(difficulty)
         if not is_valid:
-            return f"⚠️ {msg}", "", "", "", "", "", "Validation Error"
+            return f"⚠️ {msg}", "", "", "", "", "Validation Error"
 
         is_valid, msg = validate_seed(seed)
         if not is_valid:
-            return f"⚠️ {msg}", "", "", "", "", "", "Validation Error"
+            return f"⚠️ {msg}", "", "", "", "", "Validation Error"
 
         payload = {"difficulty": difficulty}
-        if seed:
-            payload["seed"] = seed
+        if seed is not None:
+            payload["seed"] = int(seed)
 
         response = requests.post(f"{BASE_URL}/api/reset", json=payload, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         data = response.json()
 
         obs = data.get("observation", {})
+        current_session_id = data.get("session_id")
 
         # Format sentiment with emoji
         sentiment_val = obs.get('customer_sentiment', 0)
@@ -191,88 +204,60 @@ def reset_environment(difficulty: str, seed: int = None) -> Tuple[str, str, str,
         difficulty_info = get_difficulty_info(difficulty)
 
         ticket_display = f"""
-<div style="padding: 10px; border-left: 4px solid {'#22c55e' if sentiment_val > 0.1 else '#ef4444' if sentiment_val < -0.1 else '#eab308'}; background: {'#f0fdf4' if sentiment_val > 0.1 else '#fef2f2' if sentiment_val < -0.1 else '#fefce8'};">
+        <div class='premium-card' style='background: white !important;'>
+            <div class='card-header'>📬 Ticket: {obs.get('ticket_subject', 'N/A')}</div>
+            <div class='card-body' style='color: black !important; background: white !important;'>
+                <div class='ticket-meta' style='color: black !important; display: flex; justify-content: space-between;'>
+                    <span style='color: black !important;'><b>Customer:</b> {obs.get('customer_name', 'N/A')}</span>
+                    <span style='color: black !important;'><b>Sentiment:</b> {sentiment_formatted}</span>
+                    <span style='color: black !important;'><b>Difficulty:</b> {difficulty.upper()}</span>
+                </div>
+                <hr style='border-top: 1px solid #e2e8f0; margin: 15px 0;'/>
+                <div class='ticket-content' style='background: #f1f5f9 !important; color: black !important; padding: 20px; border-radius: 10px; border: 1px solid #cbd5e1; font-size: 1.1em;'>
+                    {obs.get('ticket_text', 'No ticket loaded')}
+                </div>
+                <div class='difficulty-info' style='color: #475569 !important; font-style: italic; border-top: 1px solid #e2e8f0; padding-top: 10px;'>{difficulty_info}</div>
+            </div>
+        </div>
+        """
 
-### 📬 Ticket Details
-
-| Field | Value |
-|-------|-------|
-| **Subject** | {obs.get('ticket_subject', 'N/A')} |
-| **Customer** | {obs.get('customer_name', 'N/A')} |
-| **Sentiment** | {sentiment_formatted} |
-| **Difficulty** | {difficulty.upper()} |
-
----
-
-**{difficulty_info}**
-
----
-
-### 📝 Ticket Content
-
-{obs.get('ticket_text', 'No ticket loaded')}
-
-</div>
-"""
-
-        session_id = data.get('session_id', 'N/A')
+        session_id = current_session_id or 'N/A'
         session_display = session_id[:8] if session_id != 'N/A' else 'N/A'
-        status = f"""🆔 Session: `{session_display}...` | 📊 Steps Remaining: {obs.get('steps_remaining', 0)} | 🎯 Difficulty: {difficulty.upper()}"""
+        status = f"""🆔 {session_display}... | 📊 Steps: 0/{obs.get('max_steps', 0)} | 🎯 {difficulty.upper()}"""
         history = "📜 *No actions taken yet.*"
 
-        # Enhanced reward display
-        reward_display = """
-📊 **Reward Tracker**
-━━━━━━━━━━━━━━━━━━━━━
-│ Step Reward:    `0.0000`
-│ Cumulative:     `0.0000`
-│ Average:        `0.0000`
-━━━━━━━━━━━━━━━━━━━━━
-"""
+        reward_display = f"""
+        <div class='reward-tracker'>
+            <div class='reward-val'>0.0000</div>
+            <div class='reward-label'>Cumulative Reward</div>
+            <div class='reward-grid'>
+                <div class='reward-item'><span>Step:</span> 0.0000</div>
+                <div class='reward-item'><span>Avg:</span> 0.0000</div>
+            </div>
+        </div>
+        """
         message = "✅ Environment reset successfully. Ready to begin!"
-
-        # Store session ID in state
-        global current_session_id
-        current_session_id = data.get("session_id")
-
-        # Action hint
         action_hint = f"💡 {get_action_description('classify')}"
 
-        return ticket_display, status, history, reward_display, message, action_hint, "✅ Ready"
+        return ticket_display, status, history, reward_display, message, action_hint
 
-    except requests.exceptions.Timeout:
-        return "⏱️ Request timed out. Please try again.", "", "", "", "", "", "Timeout Error"
-    except requests.exceptions.ConnectionError:
-        return "🔌 Connection failed. Is the server running?", "", "", "", "", "", "Connection Error"
-    except requests.exceptions.HTTPError as e:
-        return f"🚫 HTTP Error {e.response.status_code}: {str(e)}", "", "", "", "", "", "HTTP Error"
     except Exception as e:
-        return f"❌ Error: {str(e)}", "", "", "", "", "", "Unexpected Error"
+        return f"❌ Error: {str(e)}", "", "", "", f"System Error: {e}", ""
 
 
-def step_environment(action_type: str, content: str) -> Tuple[str, str, str, str, str, str]:
+def step_environment(action_type: str, content: str) -> Tuple[str, str, str, str, str]:
     """Take a step in the environment with full validation."""
+    global current_session_id, cumulative_reward, step_count, reward_history
     try:
-        global current_session_id
-
         # Validate session
         if not current_session_id:
-            return "⚠️ Please reset the environment first.", "", "", "", "🚫 No Session", "Select an action to begin"
+            return "⚠️ Please reset the environment first.", "", "", "🚫 No Session", "Select action"
 
-        # Validate action type
-        is_valid, msg = validate_action_type(action_type)
-        if not is_valid:
-            return msg, "", "", "", "🚫 Validation Failed", get_action_description(action_type)
-
-        # Validate content
-        is_valid, msg = validate_content(content)
-        if not is_valid:
-            return msg, "", "", "", "🚫 Validation Failed", get_action_description(action_type)
-
-        # Validate action for specific type
-        is_valid, msg = validate_action_for_type(action_type, content)
-        if not is_valid:
-            return msg, "", "", "", "🚫 Validation Failed", get_action_description(action_type)
+        # Validate action
+        is_val, msg = validate_action_type(action_type)
+        if not is_val: return msg, "", "", "🚫 Invalid Action", ""
+        is_val, msg = validate_content(content)
+        if not is_val: return msg, "", "", "🚫 Invalid Content", ""
 
         payload = {
             "session_id": current_session_id,
@@ -285,60 +270,51 @@ def step_environment(action_type: str, content: str) -> Tuple[str, str, str, str
         data = response.json()
 
         obs = data.get("observation", {})
+        reward = data.get("reward", 0.0) or 0.0
+        done = data.get("done", False)
+        
+        # Update metrics
+        step_count += 1
+        cumulative_reward += reward
+        reward_history.append(reward)
+        avg_reward = cumulative_reward / step_count
 
         # Enhanced status display
         steps_remaining = obs.get('steps_remaining', 0)
-        done = data.get('done', False)
-        status_icon = "🏁" if done else "🎮"
-        status = f"""{status_icon} Steps Remaining: {steps_remaining} | Episode Done: {done}"""
+        status = f"""{'🏁' if done else '🎮'} Steps: {step_count}/{obs.get('max_steps', step_count+steps_remaining)} | Episode Done: {done}"""
 
-        # Format history with styling
+        # Format history
         history_items = obs.get("interaction_history", [])
         if history_items:
             history_parts = []
             for i, item in enumerate(history_items, 1):
                 role = item.get('role', 'unknown').title()
-                content_item = item.get('content', '')
-                role_color = "#3b82f6" if role == "Agent" else "#22c55e" if role == "Customer" else "#6b7280"
-                history_parts.append(f'<div style="padding: 8px; margin: 4px 0; border-left: 3px solid {role_color}; background: #f9fafb;">**{i}. {role}:** {content_item}</div>')
+                role_class = "role-agent" if role == "Agent" else "role-customer"
+                history_parts.append(f"<div class='history-item {role_class}' style='color: #000000 !important; background: {( '#eef2ff' if role == 'Agent' else '#f0fdf4' )} !important; border-left: 5px solid {( '#3b82f6' if role == 'Agent' else '#22c55e' )}; padding: 12px; margin: 8px 0; border-radius: 10px;'><b>{i}. {role}:</b> <span style='color: #000000 !important;'>{item.get('content', '')}</span></div>")
             history = "\n".join(history_parts)
         else:
             history = "📜 *No interactions yet.*"
 
-        # Enhanced reward display
-        reward = data.get("reward", 0.0) or 0.0
-        reward_formatted, reward_category = format_step_reward(reward)
-
-        # Track cumulative (would need state management for real tracking)
+        # Reward display
+        reward_formatted, _ = format_step_reward(reward)
         reward_display = f"""
-📊 **Reward Tracker**
-━━━━━━━━━━━━━━━━━━━━━
-│ Step Reward:    `{reward_formatted}`
-│ Category:       `{reward_category}`
-━━━━━━━━━━━━━━━━━━━━━
-"""
+        <div class='reward-tracker'>
+            <div class='reward-val'>{cumulative_reward:+.4f}</div>
+            <div class='reward-label'>Cumulative Reward</div>
+            <div class='reward-grid'>
+                <div class='reward-item'><span>Step:</span> {reward_formatted}</div>
+                <div class='reward-item'><span>Avg:</span> {avg_reward:+.4f}</div>
+            </div>
+        </div>
+        """
 
         message = obs.get("message", "Action executed.")
-        if reward > 0.2:
-            message = f"🌟 {message} Great job!"
-        elif reward > 0:
-            message = f"✓ {message}"
-        elif reward < 0:
-            message = f"⚠️ {message} Consider a different approach."
+        next_hint = get_action_description(action_type)
 
-        # Update action hint for next action
-        next_action_hint = f"💡 {get_action_description(action_type)}"
+        return status, history, reward_display, message, next_hint
 
-        return status, history, reward_display, message, "✅ Success", next_action_hint
-
-    except requests.exceptions.Timeout:
-        return "⏱️ Request timed out.", "", "", "", "Timeout Error", ""
-    except requests.exceptions.ConnectionError:
-        return "🔌 Connection failed.", "", "", "", "Connection Error", ""
-    except requests.exceptions.HTTPError as e:
-        return f"🚫 HTTP Error {e.response.status_code}", "", "", "", "HTTP Error", ""
     except Exception as e:
-        return f"❌ Error: {str(e)}", "", "", "", "Unexpected Error", ""
+        return f"❌ Error: {str(e)}", "", "", "Unexpected Error", ""
 
 
 def grade_current_episode() -> str:
@@ -539,26 +515,22 @@ def get_tasks_info() -> str:
         for task in tasks:
             difficulty = task.get('difficulty', 'unknown')
             diff_icon = "🟢" if difficulty == "easy" else "🟡" if difficulty == "medium" else "🔴"
+            
+            schema = task.get('action_schema', {})
+            schema_json = json.dumps(schema, indent=2)
 
             result += f"""
-<div style="padding: 15px; border-radius: 8px; background: #f9fafb; margin: 10px 0; border: 1px solid #e5e7eb;">
-
-### {diff_icon} {task.get('name', 'Unknown')} ({difficulty.upper()})
-
-| Property | Value |
-|----------|-------|
-| **Task ID** | `{task.get('task_id', 'N/A')}` |
-| **Max Steps** | `{task.get('max_steps', 0)}` |
-| **Difficulty** | {difficulty.title()} |
-
-**Description:**
-
-{task.get('description', 'No description available.')}
-
+<div class='premium-card' style='margin: 10px 0;'>
+    <div class='card-header' style='background: #334155;'>{diff_icon} {task.get('name', 'Unknown')}</div>
+    <div class='card-body'>
+        <p><b>Task ID:</b> <code>{task.get('task_id', 'N/A')}</code> | <b>Max Steps:</b> {task.get('max_steps', 0)}</p>
+        <p>{task.get('description', 'No description available.')}</p>
+        <details>
+            <summary style='cursor: pointer; color: #3b82f6;'>Show Action Schema</summary>
+            <pre style='background: #f1f5f9; padding: 10px; border-radius: 4px; font-size: 0.8em;'>{schema_json}</pre>
+        </details>
+    </div>
 </div>
-
----
-
 """
 
         return result
@@ -591,23 +563,31 @@ def get_metrics() -> str:
         success_rate = data.get("success_rate", 0)
         bar_width = int(success_rate * 100)
         result += f"""
-### 📊 Success Rate
-
-<div style="background: #e5e7eb; border-radius: 8px; height: 24px; margin: 8px 0;">
-  <div style="background: {'#22c55e' if success_rate >= 0.7 else '#eab308' if success_rate >= 0.4 else '#ef4444'}; width: {bar_width}%; height: 100%; border-radius: 8px; text-align: center; color: white; font-size: 14px; line-height: 24px;">{success_rate:.1%}</div>
-</div>
-
-"""
+        <div style='margin-bottom: 20px;'>
+            <div style='display: flex; justify-content: space-between; margin-bottom: 5px;'>
+                <span><b>Success Rate</b></span>
+                <span>{success_rate:.1%}</span>
+            </div>
+            <div style="background: #e2e8f0; border-radius: 999px; height: 12px;">
+                <div style="background: {'#22c55e' if success_rate >= 0.7 else '#f59e0b'}; width: {bar_width}%; height: 100%; border-radius: 999px;"></div>
+            </div>
+        </div>
+        """
 
         # Average scores by difficulty
-        result += "### 🎯 Average Scores by Difficulty\n\n"
+        result += "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;'>\n"
         for diff in ["easy", "medium", "hard"]:
             diff_score = data.get(f"avg_{diff}_score", 0)
             diff_icon = "🟢" if diff == "easy" else "🟡" if diff == "medium" else "🔴"
-            result += f"- {diff_icon} **{diff.title()}:** `{diff_score:.4f}`\n"
-
+            result += f"""
+            <div style='background: white; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; text-align: center;'>
+                <div style='font-size: 1.5em;'>{diff_icon}</div>
+                <div style='font-size: 0.8em; color: #64748b;'>{diff.upper()}</div>
+                <div style='font-size: 1.25em; font-weight: 700; color: #0f172a !important;'>{diff_score:.4f}</div>
+            </div>
+            """
+        result += "</div>"
         return result
-
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
             return "📊 **Metrics endpoint not available.**\n\nThis feature may not be implemented in your server version."
@@ -618,28 +598,126 @@ def get_metrics() -> str:
 
 # Global state
 current_session_id = None
+cumulative_reward = 0.0
+step_count = 0
 reward_history = []
 
 
 def create_gradio_interface():
     """Create the enhanced Gradio interface."""
-
-    with gr.Blocks(
-        title="SupportEnv - Customer Support RL Environment",
-        theme=gr.themes.Soft(),
-        css="""
+    
+    # Define theme and explicit high-contrast CSS
+    theme = gr.themes.Soft(primary_hue="blue", secondary_hue="slate")
+    custom_css = """
         .gradio-container { max-width: 1400px !important; }
-        .md text { font-size: 14px; }
-        """
-    ) as demo:
+        
+        /* Premium Card Styling */
+        .premium-card { 
+            border-radius: 12px; 
+            overflow: hidden; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15); 
+            background: #ffffff !important; 
+            border: 1px solid #e2e8f0;
+            margin-bottom: 24px;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: #ffffff !important;
+            padding: 14px 24px;
+            font-weight: 700;
+            font-size: 1.15em;
+            letter-spacing: 0.5px;
+        }
+        .card-body { 
+            padding: 24px; 
+            color: #000000 !important; 
+            background: #ffffff !important;
+        }
+        .card-body * { color: #000000 !important; }
+        .ticket-meta { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 20px;
+            font-size: 0.95em;
+            color: #1e293b !important;
+            font-weight: 700;
+        }
+        .ticket-content { 
+            background: #f1f5f9 !important; 
+            padding: 20px; 
+            border-radius: 10px; 
+            font-size: 1.15em; 
+            line-height: 1.7;
+            margin-bottom: 20px;
+            border: 1px solid #cbd5e1;
+            color: #000000 !important; 
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+        .ticket-content * { color: #000000 !important; }
+        .difficulty-info { 
+            font-size: 0.9em; 
+            font-style: italic; 
+            color: #475569 !important; 
+            border-top: 1px solid #e2e8f0;
+            padding-top: 15px;
+            font-weight: 600;
+        }
+        
+        /* Reward Display Styling */
+        .reward-tracker {
+            background: #0f172a !important;
+            color: #ffffff !important;
+            padding: 24px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+            border: 1px solid #334155;
+        }
+        .reward-tracker * { color: #ffffff !important; }
+        .reward-val { 
+            font-size: 3.2em; 
+            font-weight: 900; 
+            color: #38bdf8 !important; 
+            margin-bottom: 8px; 
+        }
+        .reward-label { 
+            font-size: 0.85em; 
+            text-transform: uppercase; 
+            letter-spacing: 2px; 
+            color: #94a3b8 !important; 
+            font-weight: 700;
+        }
+        .reward-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 12px; 
+            margin-top: 24px; 
+            border-top: 1px solid #334155;
+            padding-top: 24px;
+        }
+        .reward-item { font-size: 1.05em; color: #ffffff !important; font-weight: 600; }
+        
+        /* Interaction History Styling */
+        .history-item { 
+            padding: 14px 20px; 
+            margin: 12px 0; 
+            border-radius: 12px; 
+            font-size: 1.05em;
+            line-height: 1.6;
+            color: #000000 !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .history-item * { color: #000000 !important; }
+        .role-agent { background: #eef2ff !important; border-left: 6px solid #3b82f6; }
+        .role-customer { background: #f0fdf4 !important; border-left: 6px solid #22c55e; }
+    """
+
+    with gr.Blocks(title="SupportEnv Dashboard") as demo:
 
         # Header
         gr.Markdown("""
-        # 🎧 SupportEnv - Customer Support RL Environment
-
-        > An OpenEnv environment for training AI agents on customer support workflows.
-
-        **Features:** Interactive Episode Running | Baseline Testing | Real-time Metrics | Detailed Grading
+        # 🎧 SupportEnv - Advanced AI Platform
+        > Interactive RL Environment for Customer Support
         """)
 
         with gr.Tabs():
@@ -652,9 +730,9 @@ def create_gradio_interface():
                     with gr.Column(scale=3):
                         ticket_display = gr.Markdown(
                             value="""
-                            <div style="padding: 20px; text-align: center; color: #6b7280;">
-                                <h3>📬 No Active Session</h3>
-                                <p>Click 'Reset Environment' to start a new episode.</p>
+                            <div style="padding: 20px; text-align: center; color: black !important; background: white !important; border-radius: 12px; border: 1px solid #e2e8f0;">
+                                <h3 style='color: black !important;'>📬 No Active Session</h3>
+                                <p style='color: black !important;'>Click 'Reset' to start a new episode.</p>
                             </div>
                             """,
                             label="Current Ticket"
@@ -663,112 +741,97 @@ def create_gradio_interface():
                         status_display = gr.Textbox(
                             label="📊 Session Status",
                             interactive=False,
-                            placeholder="Status will appear here..."
+                            placeholder="Status info..."
                         )
 
                         message_display = gr.Textbox(
                             label="🔔 Last Message",
                             interactive=False,
-                            placeholder="Messages will appear here..."
+                            placeholder="Messages..."
                         )
 
                     with gr.Column(scale=1):
-                        gr.Markdown("### ⚙️ Configuration")
+                        gr.Markdown("### ⚙️ Config")
 
                         difficulty_dropdown = gr.Dropdown(
                             choices=["easy", "medium", "hard"],
                             value="easy",
-                            label="🎯 Task Difficulty",
-                            info="Select the challenge level"
+                            label="🎯 Difficulty"
                         )
 
                         seed_input = gr.Number(
                             value=42,
-                            label="🌱 Random Seed",
-                            precision=0,
-                            info="For reproducible episodes (optional)"
+                            label="🌱 Seed",
+                            precision=0
                         )
 
                         reset_btn = gr.Button(
-                            "🔄 Reset Environment",
-                            variant="primary",
-                            size="lg"
+                            "🔄 Reset",
+                            variant="primary"
                         )
 
                 gr.Markdown("---")
-
-                gr.Markdown("### 🎬 Take Action")
+                gr.Markdown("### 🎬 Action")
 
                 with gr.Row():
                     with gr.Column(scale=1):
                         action_type = gr.Dropdown(
                             choices=["classify", "respond", "escalate", "request_info", "resolve"],
                             value="classify",
-                            label="📌 Action Type",
-                            info="Choose your action"
+                            label="📌 Type"
                         )
 
                         action_hint = gr.Textbox(
-                            label="💡 Action Guide",
+                            label="💡 Hint",
                             interactive=False,
-                            value=get_action_description("classify"),
-                            lines=2
+                            value=get_action_description("classify")
                         )
 
                     with gr.Column(scale=2):
                         action_content = gr.Textbox(
                             label="📝 Content",
-                            placeholder="Enter your action content here...",
-                            lines=4,
-                            info="Classification category, response text, or escalation reason"
+                            placeholder="Type here...",
+                            lines=4
                         )
 
                 with gr.Row():
-                    step_btn = gr.Button("▶️ Execute Action", variant="secondary", size="lg")
-                    clear_btn = gr.Button("🧹 Clear Content", variant="stop")
+                    step_btn = gr.Button("▶️ Execute", variant="secondary")
+                    clear_btn = gr.Button("🧹 Clear", variant="stop")
 
                 gr.Markdown("---")
 
                 with gr.Row():
                     with gr.Column(scale=2):
                         history_display = gr.Markdown(
-                            value="📜 *No actions taken yet.*",
-                            label="📜 Interaction History"
+                            value="📜 *None*",
+                            label="📜 History"
                         )
 
                     with gr.Column(scale=1):
-                        reward_display = gr.Textbox(
-                            label="📊 Reward Tracker",
-                            interactive=False,
+                        reward_display = gr.HTML(
                             value="""
-📊 **Reward Tracker**
-━━━━━━━━━━━━━━━━━━━━━
-│ Step Reward:    `0.0000`
-│ Cumulative:     `0.0000`
-│ Average:        `0.0000`
-━━━━━━━━━━━━━━━━━━━━━
-""",
-                            lines=7
+                            <div class='reward-tracker'>
+                                <div class='reward-val'>0.0000</div>
+                                <div class='reward-label'>Reward</div>
+                            </div>
+                            """
                         )
 
                 gr.Markdown("---")
-
-                with gr.Row():
-                    grade_btn = gr.Button("📊 Grade Episode", variant="primary", size="lg")
-
-                grade_output = gr.Markdown(label="📋 Grading Results")
+                grade_btn = gr.Button("📊 Grade", variant="primary")
+                grade_output = gr.Markdown(label="Results")
 
                 # Connect events
                 reset_btn.click(
                     reset_environment,
                     inputs=[difficulty_dropdown, seed_input],
-                    outputs=[ticket_display, status_display, history_display, reward_display, message_display, action_hint, message_display]
+                    outputs=[ticket_display, status_display, history_display, reward_display, message_display, action_hint]
                 )
 
                 step_btn.click(
                     step_environment,
                     inputs=[action_type, action_content],
-                    outputs=[status_display, history_display, reward_display, message_display, message_display, action_hint]
+                    outputs=[status_display, history_display, reward_display, message_display, action_hint]
                 )
 
                 grade_btn.click(
@@ -776,93 +839,49 @@ def create_gradio_interface():
                     outputs=[grade_output]
                 )
 
-                # Update action hint when action type changes
                 action_type.change(
                     lambda x: get_action_description(x),
                     inputs=[action_type],
                     outputs=[action_hint]
                 )
 
-                # Clear content button
-                clear_btn.click(
-                    lambda: "",
-                    outputs=[action_content]
-                )
+                clear_btn.click(lambda: "", outputs=[action_content])
 
             # ──────────────────────────────────────────────────────────────────
             # Baseline Tab
             # ──────────────────────────────────────────────────────────────────
             with gr.TabItem("🤖 Baseline"):
-                gr.Markdown("""
-                ### 🤖 Run Baseline Agent
+                gr.Markdown("### 🤖 Agent Baseline")
+                baseline_btn = gr.Button("🚀 Run Baseline", variant="primary")
+                baseline_output = gr.Markdown(label="Results")
 
-                This runs the rule-based baseline agent against all three difficulty levels
-                and shows reproducible scores.
-
-                **What to expect:**
-                - Tests easy, medium, and hard tasks
-                - Takes ~30-60 seconds to complete
-                - Results are deterministic with same seed
-                """)
-
-                baseline_btn = gr.Button("🚀 Run Baseline", variant="primary", size="lg")
-                baseline_output = gr.Markdown(label="Baseline Results")
-
-                baseline_btn.click(
-                    run_baseline_demo,
-                    outputs=[baseline_output]
-                )
+                baseline_btn.click(run_baseline_demo, outputs=[baseline_output])
 
             # ──────────────────────────────────────────────────────────────────
             # Tasks Tab
             # ──────────────────────────────────────────────────────────────────
             with gr.TabItem("📋 Tasks"):
-                gr.Markdown("""
-                ### 📚 Task Library
+                gr.Markdown("### 📚 Libraries")
+                tasks_btn = gr.Button("📖 Load", variant="primary")
+                tasks_output = gr.Markdown(label="Tasks")
 
-                Browse available tasks and their configurations.
-                """)
-
-                tasks_btn = gr.Button("📖 Load Tasks Info", variant="primary")
-                tasks_output = gr.Markdown(label="Available Tasks")
-
-                tasks_btn.click(
-                    get_tasks_info,
-                    outputs=[tasks_output]
-                )
+                tasks_btn.click(get_tasks_info, outputs=[tasks_output])
 
             # ──────────────────────────────────────────────────────────────────
             # Metrics Tab
             # ──────────────────────────────────────────────────────────────────
             with gr.TabItem("📈 Metrics"):
-                gr.Markdown("""
-                ### 📊 Environment Metrics
-
-                View aggregate statistics about environment usage.
-                """)
-
-                metrics_btn = gr.Button("🔄 Refresh Metrics", variant="primary")
+                gr.Markdown("### 📊 Stats")
+                metrics_btn = gr.Button("🔄 Refresh", variant="primary")
                 metrics_output = gr.Markdown(label="Metrics")
 
-                metrics_btn.click(
-                    get_metrics,
-                    outputs=[metrics_output]
-                )
+                metrics_btn.click(get_metrics, outputs=[metrics_output])
 
             # ──────────────────────────────────────────────────────────────────
             # About Tab
             # ──────────────────────────────────────────────────────────────────
             with gr.TabItem("ℹ️ About"):
                 gr.Markdown("""
-                ## About SupportEnv
-
-                **SupportEnv** is a production-grade reinforcement learning environment
-                that simulates customer support workflows.
-
-                ---
-
-                ### ✨ Features
-
                 | Feature | Description |
                 |---------|-------------|
                 | 🎯 Difficulty Levels | 3 levels: Easy, Medium, Hard |
@@ -890,41 +909,25 @@ def create_gradio_interface():
                 - 📝 **Ticket text and metadata** - Full context of the customer issue
                 - 💭 **Customer sentiment** - Emotional state (-1 to 1 scale)
                 - 📜 **Interaction history** - Previous exchanges
-                | 🏷️ **Classification status** - Current category assignment
                 - ⏱️ **Steps remaining** - Episode progress indicator
-
-                ---
-
-                ### 💰 Reward Structure
-
-                | Action | Reward | Conditions |
-                |--------|--------|------------|
-                | Correct classification | +0.25 | Matching the expected category |
-                | Good response | +0.30 | Appropriate and helpful |
-                | Correct escalation | +0.35 | When escalation is the right choice |
-                | Resolution bonus | +0.40 | Successfully closing the ticket |
-                | Incorrect action | Negative | Varies by severity |
 
                 ---
 
                 ### 🔗 Links
 
                 - [📖 OpenEnv Documentation](https://openenv.dev)
-                - [💻 GitHub Repository](https://github.com/username/support-env)
-
-                ---
-
-                *Built with ❤️ for advancing AI customer support research*
                 """)
 
-    return demo
+    return demo, theme, custom_css
 
 
 if __name__ == "__main__":
-    demo = create_gradio_interface()
+    demo, theme, css = create_gradio_interface()
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
         show_error=True,
-        debug=True
+        debug=True,
+        theme=theme,
+        css=css
     )

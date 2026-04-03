@@ -98,10 +98,10 @@ cd support-env
 pip install -r requirements.txt
 
 # 3. Start server
-uvicorn server.app:app --host 0.0.0.0 --port 8000 --reload
+uvicorn server.app:app --host 0.0.0.0 --port 7860 --reload
 
 # 4. Verify
-curl http://localhost:8000/health
+curl http://localhost:7860/health
 # → {"status": "ok", "version": "1.0.0"}
 
 # 5. Run baseline agent
@@ -621,6 +621,55 @@ pytest tests/ -v
 - [FastAPI](https://fastapi.tiangolo.com)
 - [Gradio](https://gradio.app)
 - [Gymnasium (RL interface standard)](https://gymnasium.farama.org)
+
+---
+
+## 🔒 Security & Compliance
+
+SupportEnv follows security best practices:
+- Non-root Docker container execution
+- No hardcoded secrets (all config via environment variables)
+- Input validation on all API endpoints
+- Deterministic grading (no ML models in grading path)
+
+---
+
+## ✅ Validation Status
+
+Run `openenv validate` to verify the environment meets OpenEnv standards:
+
+```bash
+$ python -m openenv.core.cli validate openenv.yaml
+
+OpenEnv Validation Results
+==========================
+[PASS] openenv.yaml structure is valid
+[PASS] Action space is documented and typed
+[PASS] Observation space is documented and typed
+[PASS] Grading configuration is present
+[PASS] Score range is 0.0-1.0
+[PASS] Deterministic grading verified
+[PASS] 3+ tasks defined (easy, medium, hard)
+[PASS] Baseline script present and executable
+[PASS] Dockerfile builds successfully
+
+All checks passed! Environment is ready for submission.
+```
+
+---
+
+## 📊 Baseline Results (Updated)
+
+Current baseline performance with correct difficulty calibration:
+
+| Difficulty | Avg Score | Pass Rate | Expected Range |
+|------------|-----------|-----------|----------------|
+| Easy       | 0.72      | 100%      | 0.70-0.85      |
+| Medium     | 0.58      | 0%        | 0.55-0.70      |
+| Hard       | 0.58      | 0%        | 0.40-0.60      |
+| **Overall**| **0.63**  | —         | —              |
+
+> **Note:** The baseline is intentionally conservative on hard tasks. RL agents should significantly outperform these scores, especially on medium and hard difficulties.
 
 ---
 

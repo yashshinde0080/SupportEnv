@@ -54,11 +54,34 @@ app.add_middleware(
 environments: Dict[str, Dict[str, Any]] = {}
 SESSION_TTL_SECONDS = 3600
 
+# Global metrics tracking
+METRICS = {
+    "total_episodes": 0,
+    "success_rate": 0.0,
+    "total_successful": 0,
+    "avg_easy_score": 0.0,
+    "avg_medium_score": 0.0,
+    "avg_hard_score": 0.0,
+    "scores_by_difficulty": {"easy": [], "medium": [], "hard": []}
+}
+
 def _cleanup_sessions():
     now = time.time()
     expired = [k for k, v in environments.items() if now - v["last_accessed"] > SESSION_TTL_SECONDS]
     for k in expired:
         del environments[k]
+
+def _update_metrics(difficulty: str, score: float, passed: bool):
+    METRICS["total_episodes"] += 1
+    if passed:
+        METRICS["total_successful"] += 1
+    
+    METRICS["success_rate"] = METRICS["total_successful"] / METRICS["total_episodes"]
+    
+    if difficulty in METRICS["scores_by_difficulty"]:
+        METRICS["scores_by_difficulty"][difficulty].append(score)
+        scores = METRICS["scores_by_difficulty"][difficulty]
+        METRICS[f"avg_{difficulty}_score"] = sum(scores) / len(scores)
 
 
 class ResetRequest(BaseModel):
@@ -236,12 +259,21 @@ async def grade_episode(request: GraderRequest):
     env = env_data["env"]
     result = env.grade_episode()
     
+    # Update metrics on completion
+    _update_metrics(env.state.task_difficulty, result.score, result.passed)
+    
     return {
         "score": result.score,
         "breakdown": result.breakdown,
         "feedback": result.feedback,
         "passed": result.passed
     }
+
+
+@app.get("/metrics")
+async def get_metrics():
+    """Returns environment performance metrics."""
+    return METRICS
 
 
 @app.get("/baseline")
@@ -324,10 +356,13 @@ try:
     from frontend.gradio_ui import create_gradio_interface
     import gradio as gr
     
-    demo = create_gradio_interface()
+    demo, theme, css = create_gradio_interface()
+    # Apply theme/css explicitly if needed, but mount_gradio_app usually handles the demo object
     app = gr.mount_gradio_app(app, demo, path="/web")
 except ImportError:
     pass  # Gradio not installed
+except Exception as e:
+    print(f"Failed to mount Gradio UI: {e}")
 
 
 def main():
