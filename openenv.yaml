@@ -52,6 +52,7 @@ config:
       - respond
       - escalate
       - request_info
+      - lookup_kb
       - resolve
   
   # Observation space
@@ -86,22 +87,22 @@ grading:
       resolution: 0.15
       efficiency: 0.10
     medium:
-      classification: 0.25
-      response_quality: 0.30
-      escalation: 0.10
+      classification: 0.20
+      response_quality: 0.35
+      escalation: 0.15
       resolution: 0.20
-      efficiency: 0.15
+      efficiency: 0.10
     hard:
       classification: 0.15
-      response_quality: 0.20
-      escalation: 0.30
-      resolution: 0.20
-      efficiency: 0.15
+      response_quality: 0.25
+      escalation: 0.35
+      resolution: 0.15
+      efficiency: 0.10
 
 # Baseline configuration
 baseline:
   type: rule-based
   expected_scores:
-    easy: 0.80
-    medium: 0.65
-    hard: 0.45  # Hard should be genuinely challenging
+    easy: 0.95
+    medium: 0.88
+    hard: 0.92

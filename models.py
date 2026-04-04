@@ -18,6 +18,7 @@ class SupportAction(Action):
         - "escalate": Escalate to human agent
         - "request_info": Ask customer for more information
         - "resolve": Mark ticket as resolved
+        - "lookup_kb": Query the knowledge base for policy/procedure info
     
     content: The actual content of the action
         - For classify: the category label
@@ -25,10 +26,11 @@ class SupportAction(Action):
         - For escalate: reason for escalation
         - For request_info: what information is needed
         - For resolve: resolution summary
+        - For lookup_kb: search query (e.g. "refund", "billing", "password")
     
     confidence: Optional confidence score (0.0-1.0) for the action
     """
-    action_type: Literal["classify", "respond", "escalate", "request_info", "resolve"]
+    action_type: Literal["classify", "respond", "escalate", "request_info", "resolve", "lookup_kb"]
     content: str
     confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
@@ -64,7 +66,7 @@ class SupportObservation(Observation):
     # Feedback
     message: str = ""
     available_actions: List[str] = Field(default_factory=lambda: [
-        "classify", "respond", "escalate", "request_info", "resolve"
+        "classify", "respond", "escalate", "request_info", "resolve", "lookup_kb"
     ])
 
 
@@ -76,10 +78,10 @@ class SupportState(State):
         - episode_id: Optional[str]
         - step_count: int
     """
-    # Target information (hidden from agent in normal operation)
-    target_category: str = ""
-    target_resolution: str = ""
-    requires_escalation: bool = False
+    # Target information (HIDDEN from default model_dump)
+    target_category: str = Field(default="", exclude=True)
+    target_resolution: str = Field(default="", exclude=True)
+    requires_escalation: bool = Field(default=False, exclude=True)
 
     # Episode tracking
     task_id: str = ""
@@ -94,3 +96,25 @@ class SupportState(State):
 
     # Cumulative metrics
     total_reward: float = 0.0
+    customer_sentiment: float = 0.0
+
+
+class PublicSupportState(State):
+    """
+    Public state of the environment returned to the agent.
+    Excludes secret target fields to prevent information leaks.
+    """
+    # Episode tracking
+    task_id: str = ""
+    task_difficulty: str = ""
+    max_steps: int = 10
+
+    # Performance tracking
+    classification_correct: bool = False
+    response_quality_score: float = 0.0
+    escalation_correct: bool = False
+    resolved: bool = False
+
+    # Cumulative metrics
+    total_reward: float = 0.0
+    customer_sentiment: float = 0.0

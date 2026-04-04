@@ -8,9 +8,11 @@ CRITICAL: Graders must be:
 4. Fair - accurately measures performance
 """
 
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 from dataclasses import dataclass
 import re
+
+from server.semantic_scorer import semantic_scorer
 
 
 @dataclass
@@ -40,7 +42,8 @@ class SupportGrader:
                         "apologize", "thank", "appreciate", "fixed", "processed"],
             "negative": ["can't", "won't", "impossible", "stupid", "fault"],
             "solution": ["here's what", "you can", "please try", "steps to",
-                        "I've processed", "has been", "will be"]
+                        "I've processed", "has been", "will be"],
+            "empathy": ["sorry", "apologize", "understand", "frustrated", "regret", "patience"]
         }
     
     def grade_episode(
@@ -80,13 +83,13 @@ class SupportGrader:
         
         # 2. Response quality score (0.0 - 1.0)
         response_score = self._grade_responses(
-            action_history, task_difficulty
+            action_history, task_difficulty, expected_resolution
         )
         breakdown["response_quality"] = response_score
         
         # 3. Escalation decision score (0.0 - 1.0)
         escalation_score = self._grade_escalation(
-            action_history, requires_escalation
+            action_history, requires_escalation, task_difficulty
         )
         breakdown["escalation_decision"] = escalation_score
         
@@ -97,7 +100,7 @@ class SupportGrader:
         breakdown["resolution"] = resolution_score
         
         # 5. Efficiency score (0.0 - 1.0)
-        efficiency_score = self._grade_efficiency(total_steps, max_steps)
+        efficiency_score = self._grade_efficiency(total_steps, max_steps, task_difficulty)
         breakdown["efficiency"] = efficiency_score
         
         # Compute weighted total based on difficulty
@@ -187,7 +190,8 @@ class SupportGrader:
     def _grade_responses(
         self,
         action_history: List[Dict[str, Any]],
-        difficulty: str
+        difficulty: str,
+        expected_resolution: str
     ) -> float:
         """Grade overall response quality with anti-gaming measures."""
         responses = [
@@ -250,32 +254,50 @@ class SupportGrader:
             else:
                 # Legitimate responses rewarded for natural keyword usage
                 keyword_score = min(0.5, positive_count * 0.12) + min(0.35, solution_count * 0.12)
+            
+            resp_score = keyword_score + length_score + stuffing_penalty
 
-            resp_score = (
-                keyword_score +
-                length_score * 0.3 -
-                negative_count * 0.3 +
-                stuffing_penalty
-            )
+            # Add confidence multiplier if present
+            confidence = response.get("confidence")
+            if confidence is not None:
+                # If confidence is < 0.5, it's a weak response
+                resp_score *= (0.5 + 0.5 * confidence)
 
             total_score += max(0.0, min(1.0, resp_score))
 
         # Average across responses
         avg_score = total_score / len(responses)
+        
+        # USE SEMANTIC EVALUATION IF MODEL IS AVAILABLE
+        content_list = [r.get("content", "") for r in responses if len(r.get("content", "")) > 10]
+        semantic_res = semantic_scorer.evaluate_responses(content_list, expected_resolution)
+        if semantic_res is not None and semantic_res.get("overall", 0) > 0:
+            semantic_score = semantic_res["overall"]
+            # Combine keyword-based and semantic-based (60% weight on semantic)
+            avg_score = (avg_score * 0.4) + (semantic_score * 0.6)
 
-        # Higher standards for harder difficulties
-        # This makes it genuinely harder to score well on hard tasks
+        # Higher standards for harder difficulties.
+        # Apply a graduated scaling that penalises weak responses on hard
+        # tasks WITHOUT making it impossible to score well.
+        #   easy   → no adjustment
+        #   medium → scores below 0.6 are compressed (×0.85 multiplier)
+        #   hard   → scores below 0.7 are compressed (×0.75 multiplier)
+        # A perfect raw score still maps to 1.0 at every difficulty.
         if difficulty == "hard":
-            avg_score *= 0.55  # Much harder to get high score
+            if avg_score < 0.7:
+                avg_score *= 0.75          # weak response on a hard task
+            # else: good/great response keeps its score
         elif difficulty == "medium":
-            avg_score *= 0.75  # Moderately harder
+            if avg_score < 0.6:
+                avg_score *= 0.85          # weak response on a medium task
 
-        return min(1.0, avg_score)
+        return max(0.0, min(1.0, avg_score))
     
     def _grade_escalation(
         self,
         action_history: List[Dict[str, Any]],
-        should_escalate: bool
+        should_escalate: bool,
+        task_difficulty: str = "easy"
     ) -> float:
         """Grade escalation decision."""
         escalations = [
@@ -286,7 +308,28 @@ class SupportGrader:
 
         if should_escalate and escalated:
             # Correct: escalated when needed
-            # Check if escalation had valid reason with specific details
+            # ANTI-GAMING: Check if they attempted empathy/de-escalation
+            # before escalating (required for hard tasks).
+            respond_actions = [
+                a for a in action_history if a.get("type") == "respond"
+            ]
+            had_respond = len(respond_actions) > 0
+
+            # Check empathy ONLY in respond actions (not classify/escalate/etc.)
+            had_empathy = any(
+                any(kw in a.get("content", "").lower()
+                    for kw in self.response_quality_keywords["empathy"])
+                for a in respond_actions
+            )
+
+            # For Hard difficulty, MUST have tried to respond with empathy
+            # before escalating.  Uses the task_difficulty *parameter*
+            # (not an action-dict field, which would silently never match).
+            if task_difficulty == "hard":
+                if not had_respond or not had_empathy:
+                    return 0.4  # Significant penalty for quick-dumping on Hard
+            
+            # Check reason quality
             reason = escalations[0].get("content", "")
             if len(reason.split()) >= 10 and any(kw in reason.lower() for kw in ["immediate", "severity", "sensitivity", "human"]):
                 return 1.0
@@ -366,16 +409,23 @@ class SupportGrader:
 
         return min(1.0, base_score + action_bonus)
     
-    def _grade_efficiency(self, steps: int, max_steps: int) -> float:
-        """Grade step efficiency using continuous scoring."""
-        # Continuous function: 1.0 at step 1, decreasing linearly to 0.2 at max_steps
-        # Formula: 1.0 - 0.8 * ((steps - 1) / (max_steps - 1))
+    def _grade_efficiency(self, steps: int, max_steps: int, difficulty: str = "easy") -> float:
+        """Grade step efficiency. Harder tasks require more deliberation."""
         if steps <= 1:
-            return 1.0
-        elif steps >= max_steps:
-            return 0.2
-        else:
-            return round(1.0 - 0.8 * ((steps - 1) / (max_steps - 1)), 2)
+            return 1.0 if difficulty == "easy" else 0.5 # Discourage one-step solutions for complex tasks
+        
+        # Stricter for hard: optimal path is usually 4-6 steps
+        if difficulty == "hard":
+            # Hard tasks require deliberation (optimal is 5-9 steps)
+            if steps < 5:
+                return 0.4 # Superficial handling
+            if steps <= 9:
+                return 1.0 # High quality deliberation
+            # Penalize the tail end for inefficiency
+            return round(max(0.3, 1.0 - 0.8 * ((steps - 9) / (max_steps - 9))), 2)
+            
+        # Standard linear for easy/medium
+        return round(1.0 - 0.8 * ((steps - 1) / (max_steps - 1)), 2)
     
     def _get_weights(self, difficulty: str) -> Dict[str, float]:
         """Get grading weights based on difficulty."""
@@ -389,19 +439,19 @@ class SupportGrader:
             }
         elif difficulty == "medium":
             return {
-                "classification": 0.25,
-                "response_quality": 0.30,
-                "escalation_decision": 0.10,
+                "classification": 0.20,
+                "response_quality": 0.35,
+                "escalation_decision": 0.15,
                 "resolution": 0.20,
-                "efficiency": 0.15
+                "efficiency": 0.10
             }
         else:  # hard
             return {
                 "classification": 0.15,
-                "response_quality": 0.20,
-                "escalation_decision": 0.30,
-                "resolution": 0.20,
-                "efficiency": 0.15
+                "response_quality": 0.25,
+                "escalation_decision": 0.35,
+                "resolution": 0.15,
+                "efficiency": 0.10
             }
     
     def _generate_feedback(

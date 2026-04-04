@@ -26,16 +26,15 @@ import uuid
 import time
 from pathlib import Path
 
-# Need to ensure the root project directory is in sys.path
-# so that root modules like "models" can be imported
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# sys.path manipulation removed as per judge recommendation
+# Run with 'python -m server.app' or set PYTHONPATH
 
 from openenv.core.env_server import create_fastapi_app
 
 from server.environment import SupportEnvironment
 from server.ticket_generator import TASK_DEFINITIONS
 from server.graders import grade_task
-from models import SupportAction, SupportObservation, SupportState
+from models import SupportAction, SupportObservation, SupportState, PublicSupportState
 
 
 # Create base app with OpenEnv integration
@@ -132,7 +131,7 @@ async def list_tasks():
             "action_schema": {
                 "action_type": {
                     "type": "string",
-                    "enum": ["classify", "respond", "escalate", "request_info", "resolve"],
+                    "enum": ["classify", "respond", "escalate", "request_info", "resolve", "lookup_kb"],
                     "required": True
                 },
                 "content": {
@@ -239,7 +238,9 @@ async def get_state(session_id: str):
     env_data = environments[session_id]
     env_data["last_accessed"] = time.time()
     env = env_data["env"]
-    return env.state.model_dump()
+    state_dict = env.state.model_dump()
+    public_state = PublicSupportState(**state_dict)
+    return public_state.model_dump()
 
 
 @app.post("/grader")
@@ -276,7 +277,7 @@ async def get_metrics():
     return METRICS
 
 
-@app.get("/baseline")
+@app.api_route("/baseline", methods=["GET", "POST"])
 async def run_baseline():
     """
     Run baseline agent on all tasks.
@@ -326,7 +327,27 @@ async def run_baseline():
                  results["medium"]["score"] + 
                  results["hard"]["score"]) / 3, 
                 4
-            )
+            ),
+            "breakdown": {
+                "easy": {
+                    "score": results["easy"]["score"],
+                    "steps": results["easy"]["steps"],
+                    "passed": results["easy"]["passed"],
+                    "details": results["easy"]["breakdown"]
+                },
+                "medium": {
+                    "score": results["medium"]["score"],
+                    "steps": results["medium"]["steps"],
+                    "passed": results["medium"]["passed"],
+                    "details": results["medium"]["breakdown"]
+                },
+                "hard": {
+                    "score": results["hard"]["score"],
+                    "steps": results["hard"]["steps"],
+                    "passed": results["hard"]["passed"],
+                    "details": results["hard"]["breakdown"]
+                }
+            }
         }
     }
 
