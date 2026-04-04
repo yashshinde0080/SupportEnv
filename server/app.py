@@ -389,7 +389,7 @@ except Exception as e:
 def main():
     import uvicorn
     # uvicorn.run works better with a string import for hot reload, or just the app var
-    uvicorn.run("server.app:app", host="0.0.0.0", port=7860)
+    uvicorn.run("server.app:app", host="0.0.0.0", port=8000)
 
 if __name__ == "__main__":
     main()

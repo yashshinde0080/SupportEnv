@@ -196,47 +196,53 @@ def reset_environment(difficulty: str, seed: int = None) -> Tuple[str, str, str,
         obs = data.get("observation", {})
         current_session_id = data.get("session_id")
 
-        # Format sentiment with emoji
         sentiment_val = obs.get('customer_sentiment', 0)
-        sentiment_formatted, sentiment_category = format_sentiment(sentiment_val)
-
-        # Get difficulty info
-        difficulty_info = get_difficulty_info(difficulty)
+        sentiment_label = "Positive" if sentiment_val >= 0.5 else "Neutral" if sentiment_val >= -0.1 else "Negative"
+        sentiment_class = "badge-emerald" if sentiment_val >= 0.5 else "badge-indigo" if sentiment_val >= -0.1 else "badge-rose"
 
         ticket_display = f"""
-        <div class='premium-card' style='background: white !important;'>
-            <div class='card-header'>📬 Ticket: {obs.get('ticket_subject', 'N/A')}</div>
-            <div class='card-body' style='color: black !important; background: white !important;'>
-                <div class='ticket-meta' style='color: black !important; display: flex; justify-content: space-between;'>
-                    <span style='color: black !important;'><b>Customer:</b> {obs.get('customer_name', 'N/A')}</span>
-                    <span style='color: black !important;'><b>Sentiment:</b> {sentiment_formatted}</span>
-                    <span style='color: black !important;'><b>Difficulty:</b> {difficulty.upper()}</span>
+        <div class='premium-card' style='margin:0'>
+            <div class='card-header'>
+                <div style='display:flex; align-items:center; gap: 8px; color: black !important;'>
+                    <span style='font-size: 1.25rem;'>📬</span>
+                    <span style='color: black !important;'>{obs.get('ticket_subject', 'General Support Inquiry')}</span>
                 </div>
-                <hr style='border-top: 1px solid #e2e8f0; margin: 15px 0;'/>
-                <div class='ticket-content' style='background: #f1f5f9 !important; color: black !important; padding: 20px; border-radius: 10px; border: 1px solid #cbd5e1; font-size: 1.1em;'>
-                    {obs.get('ticket_text', 'No ticket loaded')}
+                <span class='badge badge-indigo' style='color: black !important;'>{difficulty.upper()} LEVEL</span>
+            </div>
+            <div class='card-body'>
+                <div style='display: flex; gap: 1rem; margin-bottom: 1.5rem;'>
+                    <div class='metric-card' style='padding: 0.75rem 1rem; flex: 1; border: 1px solid #e2e8f0;'>
+                        <div class='metric-label'>Customer</div>
+                        <div style='font-weight:700; color: black !important;'>{obs.get('customer_name', 'Client')}</div>
+                    </div>
+                    <div class='metric-card' style='padding: 0.75rem 1rem; flex: 1; border: 1px solid #e2e8f0;'>
+                        <div class='metric-label'>Sentiment</div>
+                        <span class='badge {sentiment_class}' style='color: black !important;'>{sentiment_label}</span>
+                    </div>
                 </div>
-                <div class='difficulty-info' style='color: #475569 !important; font-style: italic; border-top: 1px solid #e2e8f0; padding-top: 10px;'>{difficulty_info}</div>
+                <div class='ticket-view' style='color: black !important;'>
+                    {obs.get('ticket_text', 'No ticket content loaded')}
+                </div>
+                <div style='margin-top: 1rem; font-size: 0.875rem; color: #334155 !important;'>
+                    <b style='color: black !important;'>Challenge Profile:</b> <span style='color: black !important;'>{get_difficulty_info(difficulty)}</span>
+                </div>
             </div>
         </div>
         """
 
         session_id = current_session_id or 'N/A'
-        session_display = session_id[:8] if session_id != 'N/A' else 'N/A'
-        status = f"""🆔 {session_display}... | 📊 Steps: 0/{obs.get('max_steps', 0)} | 🎯 {difficulty.upper()}"""
-        history = "📜 *No actions taken yet.*"
-
+        session_short = session_id[:8] if session_id != 'N/A' else 'None'
+        status = f"CONNECTED: {session_short} | PHASE: INITIALIZED"
+        message = "✅ Environment successfully reset for new episode."
+        
+        history = "<div style='text-align: center; color: #94a3b8; padding: 20px;'>Awaiting first interaction...</div>"
         reward_display = f"""
-        <div class='reward-tracker'>
-            <div class='reward-val'>0.0000</div>
-            <div class='reward-label'>Cumulative Reward</div>
-            <div class='reward-grid'>
-                <div class='reward-item'><span>Step:</span> 0.0000</div>
-                <div class='reward-item'><span>Avg:</span> 0.0000</div>
-            </div>
+        <div style='background: #1e293b; border-radius: 12px; padding: 15px; color: white; text-align: center;'>
+            <div style='font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;'>CUMULATIVE</div>
+            <div style='font-size: 1.5rem; font-weight: 800; color: #38bdf8;'>0.000</div>
+            <div style='font-size: 0.6rem; margin-top: 5px; color: #64748b;'>REWARD</div>
         </div>
         """
-        message = "✅ Environment reset successfully. Ready to begin!"
         action_hint = f"💡 {get_action_description('classify')}"
 
         return ticket_display, status, history, reward_display, message, action_hint
@@ -279,37 +285,42 @@ def step_environment(action_type: str, content: str) -> Tuple[str, str, str, str
         reward_history.append(reward)
         avg_reward = cumulative_reward / step_count
 
-        # Enhanced status display
-        steps_remaining = obs.get('steps_remaining', 0)
-        status = f"""{'🏁' if done else '🎮'} Steps: {step_count}/{obs.get('max_steps', step_count+steps_remaining)} | Episode Done: {done}"""
+        # Format status
+        steps_total = obs.get('max_steps', step_count + obs.get('steps_remaining', 0))
+        status = f"{'🏁 COMPLETE' if done else '🎮 ACTIVE'} | STEP: {step_count}/{steps_total}"
 
-        # Format history
+        # Format history as chat bubbles
         history_items = obs.get("interaction_history", [])
         if history_items:
-            history_parts = []
-            for i, item in enumerate(history_items, 1):
-                role = item.get('role', 'unknown').title()
-                role_class = "role-agent" if role == "Agent" else "role-customer"
-                history_parts.append(f"<div class='history-item {role_class}' style='color: #000000 !important; background: {( '#eef2ff' if role == 'Agent' else '#f0fdf4' )} !important; border-left: 5px solid {( '#3b82f6' if role == 'Agent' else '#22c55e' )}; padding: 12px; margin: 8px 0; border-radius: 10px;'><b>{i}. {role}:</b> <span style='color: #000000 !important;'>{item.get('content', '')}</span></div>")
+            history_parts = ["<div style='display: flex; flex-direction: column; gap: 0.5rem;'>"]
+            for item in history_items:
+                role = item.get('role', 'unknown').lower()
+                chat_class = "chat-agent" if role == "agent" else "chat-customer"
+                role_label = "Agent" if role == "agent" else "Customer"
+                
+                history_parts.append(f"""
+                <div class='history-chat-item {chat_class}'>
+                    <div style='font-size: 0.65rem; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; opacity: 0.8;'>{role_label}</div>
+                    <div>{item.get('content', '')}</div>
+                </div>
+                """)
+            history_parts.append("</div>")
             history = "\n".join(history_parts)
         else:
-            history = "📜 *No interactions yet.*"
+            history = "<div style='text-align: center; color: #94a3b8; padding: 20px;'>No interactions logged.</div>"
 
         # Reward display
         reward_formatted, _ = format_step_reward(reward)
         reward_display = f"""
-        <div class='reward-tracker'>
-            <div class='reward-val'>{cumulative_reward:+.4f}</div>
-            <div class='reward-label'>Cumulative Reward</div>
-            <div class='reward-grid'>
-                <div class='reward-item'><span>Step:</span> {reward_formatted}</div>
-                <div class='reward-item'><span>Avg:</span> {avg_reward:+.4f}</div>
-            </div>
+        <div style='background: #1e293b; border-radius: 12px; padding: 15px; color: white; text-align: center;'>
+            <div style='font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;'>CUMULATIVE</div>
+            <div style='font-size: 1.5rem; font-weight: 800; color: #38bdf8;'>{cumulative_reward:+.3f}</div>
+            <div style='font-size: 0.65rem; margin-top: 5px; color: #22c55e;'>LAST: {reward_formatted}</div>
         </div>
         """
 
-        message = obs.get("message", "Action executed.")
-        next_hint = get_action_description(action_type)
+        message = obs.get("message", "Action processed.")
+        next_hint = f"💡 {get_action_description(action_type)}"
 
         return status, history, reward_display, message, next_hint
 
@@ -340,71 +351,54 @@ Please reset the environment and run an episode first.
         response.raise_for_status()
         data = response.json()
 
-        score = data.get('score', 0)
-        passed = data.get('passed', False)
-
-        # Score color and emoji
-        if score >= 0.8:
-            score_emoji = "🏆"
-            score_color = "#22c55e"
-            score_msg = "Excellent performance!"
-        elif score >= 0.6:
-            score_emoji = "👍"
-            score_color = "#3b82f6"
-            score_msg = "Good job!"
-        elif score >= 0.4:
-            score_emoji = "📚"
-            score_color = "#eab308"
-            score_msg = "Room for improvement."
-        else:
-            score_emoji = "💪"
-            score_color = "#ef4444"
-            score_msg = "Keep practicing!"
-
+        # Score visual data
+        score_percentage = score * 100
+        score_color = "#10b981" if passed else "#ef4444"
+        score_emoji = "🏆" if passed else "💪"
+        
         result = f"""
-<div style="padding: 15px; border-radius: 8px; background: {'#f0fdf4' if passed else '#fef2f2'}; border: 2px solid {score_color};">
-
-## {score_emoji} Grading Results
-
-### 📈 Final Score
-
-# <span style="color: {score_color}; font-size: 2em;">{score:.4f}</span>
-
-**Passed:** {'✅ Yes' if passed else '❌ No'}
-
-*{score_msg}*
-
----
-
-### 📊 Detailed Breakdown
-
-"""
+        <div class='score-box'>
+            <div class='score-circle' style='color: {score_color}; border-color: {score_color}20;'>
+                {score:.2f}
+            </div>
+            <h2 style='margin: 0;'>{score_emoji} {data.get('message', 'Assessment Complete')}</h2>
+            <div class='badge {'badge-emerald' if passed else 'badge-rose'}' style='font-size: 1rem; margin-top: 1rem;'>
+                {'PASSED' if passed else 'FAILED'}
+            </div>
+            <p style='color: #64748b; margin-top: 1.5rem; font-style: italic;'>"{data.get('feedback', 'No specific feedback available.')}"</p>
+        </div>
+        
+        <div class='premium-card'>
+            <div class='card-header'>📊 Performance Breakdown</div>
+            <div class='card-body'>
+        """
 
         breakdown = data.get("breakdown", {})
         if breakdown:
             for key, value in breakdown.items():
-                key_display = key.replace('_', ' ').title()
-                bar_width = min(100, int(value * 100))
-                bar_color = "#22c55e" if value >= 0.7 else "#eab308" if value >= 0.4 else "#ef4444"
+                label = key.replace('_', ' ').title()
+                val_pct = value * 100
+                color = "#4f46e5" if value >= 0.8 else "#f59e0b" if value >= 0.5 else "#ef4444"
+                
                 result += f"""
-**{key_display}**
-<div style="background: #e5e7eb; border-radius: 4px; height: 20px; margin: 4px 0;">
-  <div style="background: {bar_color}; width: {bar_width}%; height: 100%; border-radius: 4px; text-align: center; color: white; font-size: 12px; line-height: 20px;">{value:.2f}</div>
-</div>
-"""
+                <div style='margin-bottom: 1.5rem;'>
+                    <div style='display: flex; justify-content: space-between; font-weight: 600; font-size: 0.9rem;'>
+                        <span>{label}</span>
+                        <span>{value:.2f}</span>
+                    </div>
+                    <div class='progress-bar-container'>
+                        <div class='progress-bar-fill' style='width: {val_pct}%; background: {color};'></div>
+                    </div>
+                </div>
+                """
         else:
-            result += "*No detailed breakdown available.*\n"
+            result += "<p style='text-align: center; color: #94a3b8;'>Detailed metrics not available for this session.</p>"
 
-        feedback = data.get("feedback", "No feedback available.")
-        result += f"""
----
-
-### 💬 Feedback
-
-{feedback}
-
-</div>
-"""
+        result += """
+            </div>
+        </div>
+        """
+        return result
 
         return result
 
@@ -418,7 +412,7 @@ Please reset the environment and run an episode first.
         return f"❌ Error grading episode: {str(e)}"
 
 
-def run_baseline_demo() -> str:
+def run_baseline_demo(baseline_diff: str = "easy") -> str:
     """Run baseline and display results with enhanced formatting."""
     try:
         response = requests.get(f"{BASE_URL}/baseline", timeout=BASELINE_TIMEOUT)
@@ -575,307 +569,390 @@ def get_metrics() -> str:
         """
 
         # Average scores by difficulty
-        result += "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;'>\n"
+        result += "<div class='metric-grid'>\n"
         for diff in ["easy", "medium", "hard"]:
             diff_score = data.get(f"avg_{diff}_score", 0)
             diff_icon = "🟢" if diff == "easy" else "🟡" if diff == "medium" else "🔴"
             result += f"""
-            <div style='background: white; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; text-align: center;'>
-                <div style='font-size: 1.5em;'>{diff_icon}</div>
-                <div style='font-size: 0.8em; color: #64748b;'>{diff.upper()}</div>
-                <div style='font-size: 1.25em; font-weight: 700; color: #0f172a !important;'>{diff_score:.4f}</div>
+            <div class='metric-card'>
+                <div style='font-size: 1.5rem;'>{diff_icon}</div>
+                <div class='metric-label'>{diff.upper()} AVG</div>
+                <div class='metric-value'>{diff_score:.4f}</div>
             </div>
             """
         result += "</div>"
         return result
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 404:
-            return "📊 **Metrics endpoint not available.**\n\nThis feature may not be implemented in your server version."
+            return "<div class='alert alert-warning'>📊 Metrics endpoint not available in this server version.</div>"
         return f"🚫 HTTP Error {e.response.status_code}"
     except Exception as e:
-        return f"❌ Error fetching metrics: {str(e)}"
-
-
-# Global state
-current_session_id = None
-cumulative_reward = 0.0
-step_count = 0
-reward_history = []
+        return f"<div class='alert alert-error'>❌ Error fetching metrics: {str(e)}</div>"
 
 
 def create_gradio_interface():
-    """Create the enhanced Gradio interface."""
+    """Create the enhanced Gradio interface with a premium, modern design."""
     
-    # Define theme and explicit high-contrast CSS
-    theme = gr.themes.Soft(primary_hue="blue", secondary_hue="slate")
+    # Define theme
+    theme = gr.themes.Soft(
+        primary_hue="indigo",
+        secondary_hue="slate",
+        font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
+        spacing_size="md",
+        radius_size="lg",
+    )
+    
     custom_css = """
-        .gradio-container { max-width: 1400px !important; }
+        /* Global Styles */
+        body { background-color: #f8fafc; font-family: 'Inter', sans-serif; }
+        .gradio-container { max-width: 1400px !important; margin: 0 auto !important; }
         
-        /* Premium Card Styling */
+        /* Modern Typography */
+        h1, h2, h3 { color: #1e293b !important; font-weight: 800 !important; letter-spacing: -0.025em !important; }
+        .gr-markdown { font-size: 1.05rem; line-height: 1.6; }
+        
+        /* Main Container Cards */
         .premium-card { 
-            border-radius: 12px; 
-            overflow: hidden; 
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15); 
-            background: #ffffff !important; 
-            border: 1px solid #e2e8f0;
-            margin-bottom: 24px;
+            background: white !important; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 16px; 
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
+        .premium-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        
         .card-header {
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-            color: #ffffff !important;
-            padding: 14px 24px;
+            background: #f1f5f9 !important;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 1.25rem 1.5rem;
             font-weight: 700;
-            font-size: 1.15em;
-            letter-spacing: 0.5px;
-        }
-        .card-body { 
-            padding: 24px; 
-            color: #000000 !important; 
-            background: #ffffff !important;
-        }
-        .card-body * { color: #000000 !important; }
-        .ticket-meta { 
-            display: flex; 
-            justify-content: space-between; 
-            margin-bottom: 20px;
-            font-size: 0.95em;
-            color: #1e293b !important;
-            font-weight: 700;
-        }
-        .ticket-content { 
-            background: #f1f5f9 !important; 
-            padding: 20px; 
-            border-radius: 10px; 
-            font-size: 1.15em; 
-            line-height: 1.7;
-            margin-bottom: 20px;
-            border: 1px solid #cbd5e1;
-            color: #000000 !important; 
-            font-family: 'Inter', system-ui, sans-serif;
-        }
-        .ticket-content * { color: #000000 !important; }
-        .difficulty-info { 
-            font-size: 0.9em; 
-            font-style: italic; 
-            color: #475569 !important; 
-            border-top: 1px solid #e2e8f0;
-            padding-top: 15px;
-            font-weight: 600;
-        }
-        
-        /* Reward Display Styling */
-        .reward-tracker {
-            background: #0f172a !important;
-            color: #ffffff !important;
-            padding: 24px;
-            border-radius: 16px;
-            text-align: center;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
-            border: 1px solid #334155;
-        }
-        .reward-tracker * { color: #ffffff !important; }
-        .reward-val { 
-            font-size: 3.2em; 
-            font-weight: 900; 
-            color: #38bdf8 !important; 
-            margin-bottom: 8px; 
-        }
-        .reward-label { 
-            font-size: 0.85em; 
-            text-transform: uppercase; 
-            letter-spacing: 2px; 
-            color: #94a3b8 !important; 
-            font-weight: 700;
-        }
-        .reward-grid { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 12px; 
-            margin-top: 24px; 
-            border-top: 1px solid #334155;
-            padding-top: 24px;
-        }
-        .reward-item { font-size: 1.05em; color: #ffffff !important; font-weight: 600; }
-        
-        /* Interaction History Styling */
-        .history-item { 
-            padding: 14px 20px; 
-            margin: 12px 0; 
-            border-radius: 12px; 
-            font-size: 1.05em;
-            line-height: 1.6;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             color: #000000 !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .history-item * { color: #000000 !important; }
-        .role-agent { background: #eef2ff !important; border-left: 6px solid #3b82f6; }
-        .role-customer { background: #f0fdf4 !important; border-left: 6px solid #22c55e; }
+        .card-header * { color: #000000 !important; }
+        
+        .card-body { padding: 1.5rem; background: white !important; color: #000000 !important; }
+        .card-body * { color: #000000 !important; }
+        
+        /* Sidebar/Control Panel */
+        .sidebar { background: #f1f5f9 !important; border-radius: 16px; padding: 1.5rem; height: 100%; border: 1px solid #e2e8f0; color: #000000 !important; }
+        .sidebar * { color: #000000 !important; }
+        
+        /* Interactive Elements */
+        .gr-button-primary { 
+            background: linear-gradient(to right, #4f46e5, #4338ca) !important; 
+            border: none !important; 
+            box-shadow: 0 4px 14px 0 rgba(79, 70, 229, 0.39) !important;
+            transition: all 0.2s ease !important;
+            color: white !important; /* Buttons stay white for contrast */
+        }
+        .gr-button-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(79, 70, 229, 0.5) !important; }
+        
+        /* Status Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #000000 !important;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        .badge-indigo { background: #e0e7ff; color: #000000 !important; }
+        .badge-emerald { background: #d1fae5; color: #000000 !important; }
+        .badge-amber { background: #fef3c7; color: #000000 !important; }
+        .badge-rose { background: #ffe4e6; color: #000000 !important; }
+
+        /* Ticket Content Area */
+        .ticket-view {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 1.125rem;
+            line-height: 1.75;
+            color: #000000 !important;
+            margin: 1rem 0;
+            white-space: pre-wrap;
+            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+        }
+        
+        /* History Items */
+        .history-chat-item {
+            margin-bottom: 1rem;
+            max-width: 85%;
+            padding: 1rem 1.25rem;
+            border-radius: 1rem;
+            position: relative;
+            color: #000000 !important;
+        }
+        .chat-agent {
+            background: #4f46e5 !important;
+            color: white !important;
+            align-self: flex-end;
+            margin-left: auto;
+            border-bottom-right-radius: 0.25rem;
+        }
+        .chat-agent * { color: white !important; }
+        .chat-customer {
+            background: #f1f5f9 !important;
+            color: #000000 !important;
+            align-self: flex-start;
+            border-bottom-left-radius: 0.25rem;
+            border: 1px solid #e2e8f0;
+        }
+        .chat-customer * { color: #000000 !important; }
+        
+        /* Score Visualizations */
+        .score-box {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            color: #000000 !important;
+        }
+        .score-box * { color: #000000 !important; }
+        
+        .score-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: 900;
+            margin: 0 auto 1.5rem;
+            border: 8px solid #f1f5f9;
+        }
+        
+        .progress-bar-container {
+            width: 100%;
+            background: #f1f5f9;
+            border-radius: 9999px;
+            height: 0.75rem;
+            overflow: hidden;
+            margin: 0.5rem 0 1.5rem;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Dashboard Metric Cards */
+        .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1rem 0; }
+        .metric-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+            color: #000000 !important;
+        }
+        .metric-card * { color: #000000 !important; }
+        .metric-value { font-size: 1.5rem; font-weight: 700; color: #000000 !important; }
+        .metric-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: #64748b !important; margin-top: 0.25rem; }
+        
+        /* Alert components */
+        .alert { border-radius: 8px; padding: 12px 16px; margin-bottom: 1rem; font-weight: 500; }
+        .alert-warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+        .alert-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+        
+        /* Force Markdown text to black */
+        .gr-markdown h1, .gr-markdown h2, .gr-markdown h3, .gr-markdown p, .gr-markdown li, .gr-markdown span {
+            color: #000000 !important;
+        }
+        
+        /* Alert components */
+        .alert { border-radius: 8px; padding: 12px 16px; margin-bottom: 1rem; font-weight: 500; }
+        .alert-warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+        .alert-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
     """
 
-    with gr.Blocks(title="SupportEnv Dashboard") as demo:
-
-        # Header
-        gr.Markdown("""
-        # 🎧 SupportEnv - Advanced AI Platform
-        > Interactive RL Environment for Customer Support
-        """)
+    with gr.Blocks(title="SupportEnv Dashboard", css=custom_css, theme=theme) as demo:
+        
+        with gr.Row(elem_classes="header-row"):
+            with gr.Column(scale=8):
+                gr.Markdown("""
+                # 🎧 SupportEnv <span class='badge badge-indigo'>PRO</span>
+                A premium reinforcement learning environment for customer support automation.
+                """)
+            with gr.Column(scale=2):
+                gr.Markdown("<div style='text-align: right; padding-top: 20px;'><span class='badge badge-emerald'>V2.1.0 STABLE</span></div>")
 
         with gr.Tabs():
             # ──────────────────────────────────────────────────────────────────
             # Interactive Tab
             # ──────────────────────────────────────────────────────────────────
-            with gr.TabItem("🎮 Interactive"):
-
+            with gr.TabItem("🎮 Interactive Agent"):
                 with gr.Row():
-                    with gr.Column(scale=3):
-                        ticket_display = gr.Markdown(
-                            value="""
-                            <div style="padding: 20px; text-align: center; color: black !important; background: white !important; border-radius: 12px; border: 1px solid #e2e8f0;">
-                                <h3 style='color: black !important;'>📬 No Active Session</h3>
-                                <p style='color: black !important;'>Click 'Reset' to start a new episode.</p>
-                            </div>
-                            """,
-                            label="Current Ticket"
-                        )
-
-                        status_display = gr.Textbox(
-                            label="📊 Session Status",
-                            interactive=False,
-                            placeholder="Status info..."
-                        )
-
-                        message_display = gr.Textbox(
-                            label="🔔 Last Message",
-                            interactive=False,
-                            placeholder="Messages..."
-                        )
-
-                    with gr.Column(scale=1):
-                        gr.Markdown("### ⚙️ Config")
-
+                    # Left Column: Configuration & Controls
+                    with gr.Column(scale=1, elem_classes="sidebar"):
+                        gr.Markdown("### ⚙️ Session Config")
                         difficulty_dropdown = gr.Dropdown(
                             choices=["easy", "medium", "hard"],
                             value="easy",
-                            label="🎯 Difficulty"
+                            label="🎯 Target Difficulty",
+                            info="Select the challenge level for the agent."
                         )
-
                         seed_input = gr.Number(
                             value=42,
-                            label="🌱 Seed",
-                            precision=0
+                            label="🌱 Environment Seed",
+                            precision=0,
+                            info="Use a specific seed for reproducible tasks."
                         )
-
                         reset_btn = gr.Button(
-                            "🔄 Reset",
+                            "🔄 Initialize Environment",
                             variant="primary"
                         )
-
-                gr.Markdown("---")
-                gr.Markdown("### 🎬 Action")
-
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        action_type = gr.Dropdown(
-                            choices=["classify", "respond", "escalate", "request_info", "resolve"],
-                            value="classify",
-                            label="📌 Type"
-                        )
-
-                        action_hint = gr.Textbox(
-                            label="💡 Hint",
+                        
+                        gr.Markdown("---")
+                        gr.Markdown("### 📊 Live Metrics")
+                        status_display = gr.Textbox(
+                            label="Current Status",
                             interactive=False,
-                            value=get_action_description("classify")
+                            placeholder="Awaiting initialization..."
+                        )
+                        message_display = gr.Textbox(
+                            label="System Feedback",
+                            interactive=False,
+                            placeholder="System logs will appear here..."
                         )
 
-                    with gr.Column(scale=2):
-                        action_content = gr.Textbox(
-                            label="📝 Content",
-                            placeholder="Type here...",
-                            lines=4
-                        )
+                    # Right Column: The Interaction Workspace
+                    with gr.Column(scale=3):
+                        with gr.Group(elem_classes="premium-card"):
+                            with gr.Row(elem_classes="card-header"):
+                                gr.Markdown("### 📬 Active Support Ticket")
+                                gr.Markdown("<span class='badge badge-indigo' id='interaction-count'>LIVE FEED</span>")
+                            
+                            with gr.Column(elem_classes="card-body"):
+                                ticket_display = gr.HTML(
+                                    value="""
+                                    <div style='text-align: center; padding: 40px;'>
+                                        <div style='font-size: 3rem; margin-bottom: 1rem;'>🌑</div>
+                                        <h3 style='margin:0'>No Active Session</h3>
+                                        <p style='color: #64748b'>Initialize the environment from the sidebar to begin testing.</p>
+                                    </div>
+                                    """
+                                )
+                        
+                        with gr.Group(elem_classes="premium-card"):
+                            with gr.Row(elem_classes="card-header"):
+                                gr.Markdown("### 🎬 Action Control")
+                                action_hint = gr.Markdown("<small><i>💡 Select an action type to see documentation</i></small>")
+                            
+                            with gr.Row(elem_classes="card-body"):
+                                with gr.Column(scale=1):
+                                    action_type = gr.Dropdown(
+                                        choices=["classify", "respond", "escalate", "request_info", "resolve"],
+                                        value="classify",
+                                        label="Action Type"
+                                    )
+                                with gr.Column(scale=3):
+                                    action_content = gr.Textbox(
+                                        label="Action Content / Payload",
+                                        placeholder="Enter the agent's response or classification data...",
+                                        lines=3
+                                    )
+                                    with gr.Row():
+                                        clear_btn = gr.Button("🧹 Clear Input", size="sm")
+                                        step_btn = gr.Button("🚀 Execute Action", variant="primary", size="lg")
 
+                        with gr.Group(elem_classes="premium-card"):
+                            with gr.Row(elem_classes="card-header"):
+                                gr.Markdown("### 📜 Session History")
+                                gr.Markdown("<small>Real-time interaction log</small>")
+                            
+                            with gr.Column(elem_classes="card-body"):
+                                with gr.Row():
+                                    with gr.Column(scale=4):
+                                        history_display = gr.HTML(
+                                            value="<div style='text-align: center; color: #94a3b8; padding: 20px;'>No interactions yet.</div>"
+                                        )
+                                    with gr.Column(scale=1):
+                                        reward_display = gr.HTML(
+                                            value="""
+                                            <div style='background: #1e293b; border-radius: 12px; padding: 15px; color: white; text-align: center;'>
+                                                <div style='font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;'>CUMULATIVE</div>
+                                                <div style='font-size: 1.5rem; font-weight: 800; color: #38bdf8;'>0.000</div>
+                                                <div style='font-size: 0.6rem; margin-top: 5px; color: #64748b;'>REWARD</div>
+                                            </div>
+                                            """
+                                        )
+
+            # ──────────────────────────────────────────────────────────────────
+            # Grading & Evaluation Tab
+            # ──────────────────────────────────────────────────────────────────
+            with gr.TabItem("📊 Evaluation Report"):
                 with gr.Row():
-                    step_btn = gr.Button("▶️ Execute", variant="secondary")
-                    clear_btn = gr.Button("🧹 Clear", variant="stop")
-
-                gr.Markdown("---")
-
-                with gr.Row():
-                    with gr.Column(scale=2):
-                        history_display = gr.Markdown(
-                            value="📜 *None*",
-                            label="📜 History"
-                        )
-
-                    with gr.Column(scale=1):
-                        reward_display = gr.HTML(
+                    with gr.Column(scale=1, elem_classes="sidebar"):
+                        gr.Markdown("""
+                        ### 🔍 Agent Assessment
+                        The grader evaluates:
+                        - **Accuracy**: Correct classification
+                        - **Tone**: Professionalism
+                        - **Efficiency**: Speed to resolve
+                        - **Decisioning**: Logical escalations
+                        """)
+                        grade_btn = gr.Button("🏆 Final Evaluation", variant="primary", size="lg")
+                        
+                    with gr.Column(scale=3):
+                        grade_output = gr.HTML(
                             value="""
-                            <div class='reward-tracker'>
-                                <div class='reward-val'>0.0000</div>
-                                <div class='reward-label'>Reward</div>
+                            <div style='border: 2px dashed #e2e8f0; border-radius: 16px; padding: 60px; text-align: center; color: #94a3b8;'>
+                                <div style='font-size: 4rem; margin-bottom: 1rem;'>📋</div>
+                                <h3>Results Pending</h3>
+                                <p>Complete an episode and click evaluate.</p>
                             </div>
                             """
                         )
 
-                gr.Markdown("---")
-                grade_btn = gr.Button("📊 Grade", variant="primary")
-                grade_output = gr.Markdown(label="Results")
-
-                # Connect events
-                reset_btn.click(
-                    reset_environment,
-                    inputs=[difficulty_dropdown, seed_input],
-                    outputs=[ticket_display, status_display, history_display, reward_display, message_display, action_hint]
-                )
-
-                step_btn.click(
-                    step_environment,
-                    inputs=[action_type, action_content],
-                    outputs=[status_display, history_display, reward_display, message_display, action_hint]
-                )
-
-                grade_btn.click(
-                    grade_current_episode,
-                    outputs=[grade_output]
-                )
-
-                action_type.change(
-                    lambda x: get_action_description(x),
-                    inputs=[action_type],
-                    outputs=[action_hint]
-                )
-
-                clear_btn.click(lambda: "", outputs=[action_content])
-
             # ──────────────────────────────────────────────────────────────────
-            # Baseline Tab
+            # Tasks/Benchmarks Tab
             # ──────────────────────────────────────────────────────────────────
-            with gr.TabItem("🤖 Baseline"):
-                gr.Markdown("### 🤖 Agent Baseline")
-                baseline_btn = gr.Button("🚀 Run Baseline", variant="primary")
-                baseline_output = gr.Markdown(label="Results")
-
-                baseline_btn.click(run_baseline_demo, outputs=[baseline_output])
-
-            # ──────────────────────────────────────────────────────────────────
-            # Tasks Tab
-            # ──────────────────────────────────────────────────────────────────
-            with gr.TabItem("📋 Tasks"):
-                gr.Markdown("### 📚 Libraries")
-                tasks_btn = gr.Button("📖 Load", variant="primary")
-                tasks_output = gr.Markdown(label="Tasks")
-
-                tasks_btn.click(get_tasks_info, outputs=[tasks_output])
+            with gr.TabItem("📚 Benchmarks"):
+                with gr.Row():
+                    with gr.Column(scale=1, elem_classes="sidebar"):
+                        gr.Markdown("### 🏁 Baseline Tests")
+                        baseline_diff = gr.Dropdown(
+                            choices=["easy", "medium", "hard"],
+                            value="easy",
+                            label="Test Difficulty"
+                        )
+                        baseline_btn = gr.Button("🏃 Run Group Benchmark")
+                        gr.Markdown("---")
+                        tasks_btn = gr.Button("🔍 Refresh Task List")
+                    
+                    with gr.Column(scale=3):
+                        with gr.Tabs():
+                            with gr.TabItem("📋 Task Repository"):
+                                tasks_display = gr.HTML("Click 'Refresh' to load tasks")
+                            with gr.TabItem("🔬 Benchmark Results"):
+                                baseline_output = gr.Markdown("Results will appear here...")
 
             # ──────────────────────────────────────────────────────────────────
             # Metrics Tab
             # ──────────────────────────────────────────────────────────────────
             with gr.TabItem("📈 Metrics"):
-                gr.Markdown("### 📊 Stats")
-                metrics_btn = gr.Button("🔄 Refresh", variant="primary")
-                metrics_output = gr.Markdown(label="Metrics")
-
-                metrics_btn.click(get_metrics, outputs=[metrics_output])
+                with gr.Row():
+                    with gr.Column(scale=1, elem_classes="sidebar"):
+                        gr.Markdown("### 📉 System Stats")
+                        metrics_btn = gr.Button("🔄 Refresh Metrics")
+                    with gr.Column(scale=3):
+                        metrics_display = gr.HTML("Click 'Refresh' to load stats")
 
             # ──────────────────────────────────────────────────────────────────
             # About Tab
@@ -890,33 +967,42 @@ def create_gradio_interface():
                 | 🔄 OpenEnv Compliant | Full API compatibility |
                 | 🐳 Docker Ready | Easy deployment |
 
-                ---
-
-                ### 🎬 Action Space
-
-                | Action | Description | Use Case |
-                |--------|-------------|----------|
-                | `classify` | Categorize the ticket | First action to understand the issue |
-                | `respond` | Send a response | Address customer concerns |
-                | `escalate` | Transfer to human | Complex issues beyond AI scope |
-                | `request_info` | Ask for details | When more context is needed |
-                | `resolve` | Close the ticket | When issue is fully addressed |
-
-                ---
-
-                ### 👁️ Observation Space
-
-                - 📝 **Ticket text and metadata** - Full context of the customer issue
-                - 💭 **Customer sentiment** - Emotional state (-1 to 1 scale)
-                - 📜 **Interaction history** - Previous exchanges
-                - ⏱️ **Steps remaining** - Episode progress indicator
-
-                ---
-
-                ### 🔗 Links
-
+                ### 🔗 Resources
                 - [📖 OpenEnv Documentation](https://openenv.dev)
+                - [🧑‍💻 Source Repository](https://github.com/support-env)
                 """)
+
+        # ──────────────────────────────────────────────────────────────────
+        # Event Listeners
+        # ──────────────────────────────────────────────────────────────────
+        reset_btn.click(
+            reset_environment,
+            inputs=[difficulty_dropdown, seed_input],
+            outputs=[ticket_display, status_display, history_display, reward_display, message_display, action_hint]
+        )
+        
+        step_btn.click(
+            step_environment,
+            inputs=[action_type, action_content],
+            outputs=[status_display, history_display, reward_display, message_display, action_hint]
+        )
+        
+        grade_btn.click(
+            grade_current_episode,
+            outputs=[grade_output]
+        )
+        
+        tasks_btn.click(get_tasks_info, outputs=[tasks_display])
+        metrics_btn.click(get_metrics, outputs=[metrics_display])
+        baseline_btn.click(run_baseline_demo, inputs=[baseline_diff], outputs=[baseline_output])
+        
+        clear_btn.click(lambda: "", outputs=[action_content])
+        
+        action_type.change(
+            lambda x: f"💡 {get_action_description(x)}",
+            inputs=[action_type],
+            outputs=[action_hint]
+        )
 
     return demo, theme, custom_css
 
@@ -927,7 +1013,5 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=7860,
         show_error=True,
-        debug=True,
-        theme=theme,
-        css=css
+        debug=True
     )
