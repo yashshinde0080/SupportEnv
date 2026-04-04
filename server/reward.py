@@ -11,6 +11,7 @@ Key Design Principles:
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 import re
+from server.semantic_scorer import semantic_scorer
 
 
 @dataclass
@@ -87,6 +88,7 @@ class RewardEngine:
         max_steps: int,
         is_resolved: bool,
         task_difficulty: str,
+        target_resolution: str = "",
         confidence: Optional[float] = None
     ) -> RewardBreakdown:
         """
@@ -125,7 +127,7 @@ class RewardEngine:
             
         elif action_type == "respond":
             breakdown.response_reward = self._compute_response_reward(
-                action_content, customer_sentiment, task_difficulty
+                action_content, customer_sentiment, task_difficulty, target_resolution
             )
             breakdown.tone_reward = self._compute_tone_reward(
                 action_content, customer_sentiment
@@ -227,46 +229,56 @@ class RewardEngine:
         self, 
         response: str, 
         sentiment: float,
-        difficulty: str
+        difficulty: str,
+        target_resolution: str = ""
     ) -> float:
-        """Compute reward for response quality."""
+        """Compute reward for response quality, aligned with SupportGrader logic."""
         response_lower = response.lower()
         
-        # Check for harmful content
+        # 1. Check for harmful content (Critical Failure)
         for keyword in self.HARMFUL_KEYWORDS:
             if keyword in response_lower:
                 return self.HARMFUL_RESPONSE
         
-        # Check response length (too short or too long is bad)
+        # 2. Check response length
         word_count = len(response.split())
         if word_count < 5:
             return self.POOR_RESPONSE
-        if word_count > 200:
-            return self.ADEQUATE_RESPONSE  # Verbose but not terrible
         
-        # Check for solution-oriented language
-        solution_score = sum(1 for kw in self.SOLUTION_KEYWORDS if kw in response_lower)
+        # 3. Keyword-based heuristic (Empathy & Solution)
+        solution_count = sum(1 for kw in self.SOLUTION_KEYWORDS if kw in response_lower)
+        empathy_count = sum(1 for kw in self.EMPATHY_KEYWORDS if kw in response_lower)
         
-        # Check for empathy
-        empathy_score = sum(1 for kw in self.EMPATHY_KEYWORDS if kw in response_lower)
+        # Map keywords to a 0.0-1.0 base score (max 0.4 for keywords)
+        keyword_base = (min(2, empathy_count) * 0.15) + (min(2, solution_count) * 0.05)
         
-        # Higher standards for harder difficulties
+        # 4. Semantic evaluation (if available and target known)
+        semantic_score = 0.0
+        if target_resolution and len(response) > 10:
+            res = semantic_scorer.evaluate_responses([response], target_resolution)
+            if res:
+                semantic_score = res.get("overall", 0.0)
+        
+        # 5. Blend scores (same 40/60 blend as SupportGrader)
+        if semantic_score > 0:
+            avg_score = (keyword_base * 0.4) + (semantic_score * 0.6)
+        else:
+            avg_score = keyword_base
+            
+        # 6. Apply difficulty-based graduated scaling (aligned with SupportGrader)
+        #    hard   → scores below 0.7 compressed ×0.75
+        #    medium → scores below 0.6 compressed ×0.85
+        #    easy   → no adjustment
         if difficulty == "hard":
-            required_empathy = 2
-            required_solution = 1
+            if avg_score < 0.7:
+                avg_score *= 0.75
         elif difficulty == "medium":
-            required_empathy = 1
-            required_solution = 1
-        else:
-            required_empathy = 0
-            required_solution = 1
-        
-        if empathy_score >= required_empathy and solution_score >= required_solution:
-            return self.GOOD_RESPONSE
-        elif solution_score >= 1:
-            return self.ADEQUATE_RESPONSE
-        else:
-            return self.POOR_RESPONSE
+            if avg_score < 0.6:
+                avg_score *= 0.85
+
+        normalized_score = max(0.0, min(1.0, avg_score))
+
+        return self.GOOD_RESPONSE * normalized_score if normalized_score > 0 else self.POOR_RESPONSE * (1.0 - avg_score)
     
     def _compute_tone_reward(self, response: str, sentiment: float) -> float:
         """Compute reward for appropriate tone given customer sentiment."""

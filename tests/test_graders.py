@@ -138,19 +138,20 @@ class TestEscalationGrading:
     """Test escalation decision grading."""
     
     def test_correct_escalation(self):
-        """Escalating when needed should score high."""
+        """Escalating when needed (with empathy first on hard) should score high."""
         grader = SupportGrader()
         
         result = grader.grade_episode(
             action_history=[
-                {"type": "escalate", "content": "Customer is threatening legal action", "step": 1}
+                {"type": "respond", "content": "I'm so sorry to hear about this. I understand how upsetting this must be.", "step": 1},
+                {"type": "escalate", "content": "Customer is threatening legal action due to severity and sensitivity of the issue", "step": 2}
             ],
             target_category="billing",
             requires_escalation=True,
             expected_resolution="Escalate",
             task_difficulty="hard",
             is_resolved=True,
-            total_steps=1,
+            total_steps=2,
             max_steps=10
         )
         

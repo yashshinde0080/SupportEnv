@@ -89,7 +89,7 @@ class SupportGrader:
         
         # 3. Escalation decision score (0.0 - 1.0)
         escalation_score = self._grade_escalation(
-            action_history, requires_escalation
+            action_history, requires_escalation, task_difficulty
         )
         breakdown["escalation_decision"] = escalation_score
         
@@ -276,20 +276,28 @@ class SupportGrader:
             # Combine keyword-based and semantic-based (60% weight on semantic)
             avg_score = (avg_score * 0.4) + (semantic_score * 0.6)
 
-        # Higher standards for harder difficulties (Documented for Judges)
-        # We multiply by difficulty-factors to ensure a 'hard' task is actually significantly 
-        # harder to score a 1.0 on compared to 'easy', which avoids score inversion.
+        # Higher standards for harder difficulties.
+        # Apply a graduated scaling that penalises weak responses on hard
+        # tasks WITHOUT making it impossible to score well.
+        #   easy   → no adjustment
+        #   medium → scores below 0.6 are compressed (×0.85 multiplier)
+        #   hard   → scores below 0.7 are compressed (×0.75 multiplier)
+        # A perfect raw score still maps to 1.0 at every difficulty.
         if difficulty == "hard":
-            avg_score *= 0.55  # Requires almost perfect response to get a 0.5+ score
+            if avg_score < 0.7:
+                avg_score *= 0.75          # weak response on a hard task
+            # else: good/great response keeps its score
         elif difficulty == "medium":
-            avg_score *= 0.75  # Moderate penalty for medium difficulty
-            
-        return min(1.0, avg_score)
+            if avg_score < 0.6:
+                avg_score *= 0.85          # weak response on a medium task
+
+        return max(0.0, min(1.0, avg_score))
     
     def _grade_escalation(
         self,
         action_history: List[Dict[str, Any]],
-        should_escalate: bool
+        should_escalate: bool,
+        task_difficulty: str = "easy"
     ) -> float:
         """Grade escalation decision."""
         escalations = [
@@ -300,19 +308,26 @@ class SupportGrader:
 
         if should_escalate and escalated:
             # Correct: escalated when needed
-            # ANTI-GAMING: Check if they attempted empathy/de-escalation before escalating (for Hard)
-            action_history_types = [a.get("type") for a in action_history]
-            content_history = [a.get("content", "").lower() for a in action_history]
-            
-            # Identify if at least one response was empathetic
-            had_empathy = any(any(kw in c for kw in self.response_quality_keywords["empathy"]) for c in content_history)
-            had_respond = "respond" in action_history_types
-            
-            # For Hard difficulty, MUST have tried to respond with empathy before escalating
-            # Rule: Don't just dump sensitive/angry customers; try to calm them first.
-            if should_escalate and any(a.get("task_difficulty") == "hard" for a in action_history):
+            # ANTI-GAMING: Check if they attempted empathy/de-escalation
+            # before escalating (required for hard tasks).
+            respond_actions = [
+                a for a in action_history if a.get("type") == "respond"
+            ]
+            had_respond = len(respond_actions) > 0
+
+            # Check empathy ONLY in respond actions (not classify/escalate/etc.)
+            had_empathy = any(
+                any(kw in a.get("content", "").lower()
+                    for kw in self.response_quality_keywords["empathy"])
+                for a in respond_actions
+            )
+
+            # For Hard difficulty, MUST have tried to respond with empathy
+            # before escalating.  Uses the task_difficulty *parameter*
+            # (not an action-dict field, which would silently never match).
+            if task_difficulty == "hard":
                 if not had_respond or not had_empathy:
-                    return 0.4 # Significant penalty for quick-dumping on Hard
+                    return 0.4  # Significant penalty for quick-dumping on Hard
             
             # Check reason quality
             reason = escalations[0].get("content", "")
@@ -424,11 +439,11 @@ class SupportGrader:
             }
         elif difficulty == "medium":
             return {
-                "classification": 0.25,
-                "response_quality": 0.30,
-                "escalation_decision": 0.10,
+                "classification": 0.20,
+                "response_quality": 0.35,
+                "escalation_decision": 0.15,
                 "resolution": 0.20,
-                "efficiency": 0.15
+                "efficiency": 0.10
             }
         else:  # hard
             return {

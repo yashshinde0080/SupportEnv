@@ -18,6 +18,7 @@ class SupportAction(Action):
         - "escalate": Escalate to human agent
         - "request_info": Ask customer for more information
         - "resolve": Mark ticket as resolved
+        - "lookup_kb": Query the knowledge base for policy/procedure info
     
     content: The actual content of the action
         - For classify: the category label
@@ -25,6 +26,7 @@ class SupportAction(Action):
         - For escalate: reason for escalation
         - For request_info: what information is needed
         - For resolve: resolution summary
+        - For lookup_kb: search query (e.g. "refund", "billing", "password")
     
     confidence: Optional confidence score (0.0-1.0) for the action
     """
@@ -64,7 +66,7 @@ class SupportObservation(Observation):
     # Feedback
     message: str = ""
     available_actions: List[str] = Field(default_factory=lambda: [
-        "classify", "respond", "escalate", "request_info", "resolve"
+        "classify", "respond", "escalate", "request_info", "resolve", "lookup_kb"
     ])
 
 

@@ -182,6 +182,7 @@ class SupportEnvironment(Environment):
             max_steps=self._state.max_steps,
             is_resolved=self._is_resolved,
             task_difficulty=self._state.task_difficulty,
+            target_resolution=self._state.target_resolution,
             confidence=action.confidence
         )
         
@@ -297,10 +298,23 @@ class SupportEnvironment(Environment):
         has_empathy = any(kw in response_lower for kw in ["understand", "sorry", "apologize", "help", "thank"])
         has_solution = any(kw in response_lower for kw in ["here's", "you can", "resolved", "fixed", "processed", "please try"])
         has_refund = "refund" in response_lower
+        # Detect if the agent is *refusing* the refund rather than offering one.
+        refund_refusal_signals = ["cannot", "can't", "won't", "not eligible", "not able", "unable", "don't qualify", "policy does not"]
+        is_refund_refusal = has_refund and any(phrase in response_lower for phrase in refund_refusal_signals)
+        # Detect if the agent is *actively offering* a refund (not just mentioning the word).
+        refund_offer_signals = ["process", "issued", "initiated", "approved", "applied",
+                                "credited", "will refund", "your refund", "full refund",
+                                "refund has been", "refund will be", "i've refunded",
+                                "we have refunded", "processing your refund"]
+        is_refund_offer = has_refund and any(phrase in response_lower for phrase in refund_offer_signals)
         has_escalation_mention = "escalat" in response_lower
-        
-        if has_refund:
-            sentiment += 0.4
+
+        if has_refund and is_refund_refusal:
+            sentiment -= 0.3   # Refusing a refund worsens sentiment
+        elif has_refund and is_refund_offer:
+            sentiment += 0.4   # Actively offering a refund genuinely improves sentiment
+        elif has_refund:
+            sentiment += 0.1   # Merely mentioning "refund" without offering — small bump
         if has_escalation_mention:
             sentiment += 0.2
             
