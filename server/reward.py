@@ -22,6 +22,7 @@ class RewardBreakdown:
     escalation_reward: float = 0.0
     efficiency_reward: float = 0.0
     tone_reward: float = 0.0
+    kb_reward: float = 0.0
     penalty: float = 0.0
     reason: str = ""
 
@@ -55,6 +56,7 @@ class RewardEngine:
     HALLUCINATION = -0.30
     INVALID_ACTION = -0.10
     TOO_MANY_STEPS = -0.05  # Per step over optimal
+    SLA_BREACH = -0.50
     
     # Response quality keywords (positive)
     EMPATHY_KEYWORDS = ["understand", "sorry", "apologize", "appreciate", "thank you", "help"]
@@ -84,7 +86,8 @@ class RewardEngine:
         step_count: int,
         max_steps: int,
         is_resolved: bool,
-        task_difficulty: str
+        task_difficulty: str,
+        confidence: Optional[float] = None
     ) -> RewardBreakdown:
         """
         Compute reward for a single action.
@@ -99,6 +102,7 @@ class RewardEngine:
             max_steps: Maximum allowed steps
             is_resolved: Whether issue is resolved
             task_difficulty: easy/medium/hard
+            confidence: Optional confidence string or float
             
         Returns:
             RewardBreakdown with detailed reward computation
@@ -150,10 +154,32 @@ class RewardEngine:
             else:
                 breakdown.penalty += -0.05
                 breakdown.reason += "Unnecessary info request. "
+                
+        elif action_type == "lookup_kb":
+            if task_difficulty in ["medium", "hard"]:
+                breakdown.kb_reward = 0.15
+                breakdown.reason += "Appropriate KB usage. "
+            else:
+                breakdown.penalty += -0.10
+                breakdown.reason += "Unnecessary KB lookup on easy task. "
         
-        # Step penalty for taking too long
-        if step_count > max_steps * 0.7:
+        # Step penalty for taking too long / SLA Breach
+        if step_count >= max_steps:
+            breakdown.penalty += self.SLA_BREACH
+            breakdown.reason += "SLA breached (max steps reached). "
+        elif step_count > max_steps * 0.7:
             breakdown.penalty += self.TOO_MANY_STEPS
+            
+        # Calibrated Confidence adjustment
+        if confidence is not None:
+            # We want to reward being confident when right, and heavily penalize when confident and wrong
+            temp_total = breakdown.classification_reward + breakdown.response_reward + breakdown.escalation_reward + breakdown.efficiency_reward + breakdown.tone_reward + breakdown.penalty
+            if temp_total > 0:
+                breakdown.total += (confidence - 0.5) * 0.1
+                breakdown.reason += f"Confidence bonus ({confidence}). "
+            elif temp_total < 0:
+                breakdown.total -= (confidence) * 0.1
+                breakdown.reason += f"Overconfidence penalty ({confidence}). "
         
         # Compute total
         breakdown.total = (
@@ -162,6 +188,7 @@ class RewardEngine:
             breakdown.escalation_reward +
             breakdown.efficiency_reward +
             breakdown.tone_reward +
+            breakdown.kb_reward +
             breakdown.penalty
         )
         

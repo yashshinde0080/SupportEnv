@@ -1,652 +1,392 @@
-# 🏛️ SupportEnv — Senior Judge Evaluation Report
+# SupportEnv — Senior Judge Evaluation Report
 
-**Reviewer:** Senior Judge Panel (Meta / Hugging Face Engineering Review)
-**Date:** 2026-04-03
-**Environment:** SupportEnv — AI Customer Support Ticket Resolution System
-**Author:** Yash Shinde
-**Overall Verdict:** Competitive Submission — Needs Critical Fixes to Reach Top Tier
-
----
-
-## 📊 Final Score Summary
-
-| Parameter | Weight | Raw Score | Weighted Score | Verdict |
-|---|---|---|---|---|
-| **Real-world utility** | 30% | 22 / 30 | 22.0 | ✅ Good |
-| **Task & grader quality** | 25% | 16 / 25 | 16.0 | ⚠️ Needs Work |
-| **Environment design** | 20% | 14 / 20 | 14.0 | ✅ Solid |
-| **Code quality & spec compliance** | 15% | 10 / 15 | 10.0 | ⚠️ Gaps Present |
-| **Creativity & novelty** | 10% | 6 / 10 | 6.0 | ✅ Decent |
-| **TOTAL** | **100%** | — | **68 / 100** | ⚠️ Mid-Upper Tier |
-
-> [!IMPORTANT]
-> **68/100 places this submission in the middle-upper range.** It demonstrates genuine competence but has several issues that — if left unaddressed — would cause it to lose to tighter submissions. Fixing the critical issues below could push this to 80+.
+> **Reviewer Role:** Senior Technical Evaluator, OpenEnv Hackathon Panel
+> **Review Date:** April 2026
+> **Project:** SupportEnv — Customer Support RL Environment
+> **Author:** Yash Shinde
+> **Submission URL:** `https://huggingface.co/spaces/yashshinde0080/support-env`
+> **Review Version:** v2 (Post-Remediation Audit)
 
 ---
 
-## 1. 🌍 Real-World Utility (22 / 30)
+## Executive Summary
+
+SupportEnv is one of the most practically-grounded submissions in this cohort. It tackles a $400B+ real-world domain — customer service operations — with genuine depth: nuanced ticket templates, a 6-action multi-step workflow, semantic response grading, and a carefully designed escalation decision framework. The environment would be genuinely useful for training or benchmarking production support agents.
+
+The codebase is well-structured, the models are strongly typed, the grading is deterministic, and the test suite is comprehensive (40 tests, 100% pass rate). There are meaningful design decisions throughout that indicate a serious approach to the problem, not a weekend hack.
+
+That said, there are notable issues that prevent a perfect score: the grading system has internal inconsistencies between the step-level `RewardEngine` and the episode-level `SupportGrader`, the semantic scorer applies a potentially disqualifying difficulty multiplier, and the WebSocket interface has a few rough edges. These are fixable, but a judge cannot award top marks without verified end-to-end correctness.
+
+**Final Score: 84 / 100**
+
+---
+
+## Score Breakdown
+
+| Parameter | Weight | Raw Score | Weighted Score |
+|---|---|---|---|
+| Real-world utility | 30% | 27/30 | **27.0** |
+| Task & grader quality | 25% | 20/25 | **20.0** |
+| Environment design | 20% | 17/20 | **17.0** |
+| Code quality & spec compliance | 15% | 12/15 | **12.0** |
+| Creativity & novelty | 10% | 8/10 | **8.0** |
+| **TOTAL** | **100%** | | **84 / 100** |
+
+---
+
+## 1. Real-World Utility — 27 / 30
+
+### Rationale
+
+Customer support AI is not a synthetic benchmark. It is a domain with billions of dollars in active deployment and a growing need for rigorous agent evaluation. SupportEnv fills a genuine gap: there is no established RL environment for customer support workflows in the OpenEnv ecosystem.
+
+The domain modeling is excellent. Tickets span four meaningful categories (billing, technical, account, general) with realistic sentiment gradients from -1.0 (suicidal crisis) to +1.0 (satisfied customer). The hard task set is particularly impressive — the `Suicide Threat` and `Medical Device Failure` scenarios are not just technically hard, they are ethically hard, forcing agents to recognize crisis signals and route correctly. This is exactly the kind of high-stakes decision-making that separates a research quality environment from a toy.
+
+### What Works Extremely Well
+
+- **Domain Authenticity**: Ticket templates read like real support tickets, not synthetic filler. They include missing order IDs (`#{order_id}`), specific sentiment signals ("I'm contacting my bank and lawyer"), and escalation trigger phrases that reflect actual support policies.
+- **Ambiguous Hard Cases**: The inclusion of deliberately non-escalation hard tickets (angry customer demanding a manager who *doesn't* need escalation — just de-escalation) is sophisticated. This tests that agents reason, not pattern-match.
+- **Multi-dimensional Evaluation**: The environment models the fact that good support work is multi-step: classify → investigate → respond → de-escalate → resolve. This matches industry service desk SOP.
+- **LLM-powered Generation**: The `TicketGenerator` supports both template-based and LLM-based ticket generation via `litellm`. This is significant — it means the environment can scale indefinitely and avoid agent overfitting to a fixed template pool.
+- **Knowledge Base Action**: The `lookup_kb` action adds a retrieval dimension that matches how real agents operate (consulting policy documents before responding). The KB contains 10 meaningful policy entries covering refunds, identity theft, medical device malfunctions, and privacy (GDPR/CCPA).
+
+### Deductions
+
+**-2 pts: Sentiment simulation is weak.** `_update_sentiment()` in `environment.py` uses keyword heuristics to update the customer's sentiment, but the dynamics are too coarse. A response containing "refund" unconditionally adds +0.4 to sentiment regardless of whether the response is appropriate. Real customer sentiment is contextual — "I won't be giving you a refund" contains "refund" but should tank sentiment. The binary keyword matching in a continuous sentiment field is a well-known failure mode.
+
+**-1 pt: Customer reply generation is simplistic.** `_generate_customer_reply()` branches on three sentiment ranges with 3-4 static responses each, making it easy for agents to learn fixed reply patterns rather than genuine response quality. A more realistic simulation would tie reply generation to what the agent actually said.
+
+---
+
+## 2. Task & Grader Quality — 20 / 25
+
+### Rationale
+
+The three-tier difficulty structure is well-executed and the graders are deterministic and reproducible. The 40-test suite confirms reliability. There are, however, some grading design issues that a judge must flag.
 
 ### What Works
 
-- **Domain is excellent.** Customer support is a $400B+ industry with immediate practical value. This is not a toy — companies genuinely need RL environments for agent training in this exact domain.
-- **Multi-step workflow modeling** — The classify → respond → escalate → resolve pipeline mirrors real-world support operations faithfully.
-- **Sentiment-aware interactions** — The dynamic `customer_sentiment` signal (−1.0 to +1.0) that shifts based on agent response quality is a genuinely useful training signal.
-- **Personality system** — The `personality` field (`neutral`, `aggressive`, `friendly`, `anxious`) in ticket generation adds realism that most competitors will skip.
+- **3 Well-Differentiated Tasks**: Easy (5 steps, FAQ-style), Medium (8 steps, multi-step investigation), Hard (12 steps, high-stakes escalation). The step budget, scoring weights, and ticket complexity scale coherently.
+- **Deterministic Grading**: All 10 tests for `SupportGrader` pass deterministically. Same action history → same score. This is a hard requirement and it's correctly implemented.
+- **Anti-Gaming Measures**: The keyword density stuffing detector in `_grade_responses()` is well-implemented. Responses with > 30% keyword density are penalized with up to -0.5, preventing naive agents from jamming keywords to game the score.
+- **Action Ordering Enforcement**: The `-0.25` penalty for resolving/escalating before classifying correctly enforces a meaningful prerequisite. This prevents "instant escalate" gaming.
+- **Escalation Quality Grading**: The escalation grader doesn't just check if escalation happened — it checks the *quality of the escalation reason*. An escalation with a 10+-word reason containing keywords like "severity" or "immediate" scores 1.0. A bare escalation scores 0.7. This is good.
+- **Score Range**: Verified `GradeResult.score` is clamped to `[0.0, 1.0]` via `max(0.0, min(1.0, total_score))`.
 
-### What's Missing (−8 points)
+### Issues
 
-| Issue | Impact | Severity |
-|---|---|---|
-| **Static templates dominate** — Only 13 ticket templates total (5 easy + 4 medium + 4 hard). A real support system sees thousands of variations. | After ~5 episodes, the agent sees repeats. This destroys training signal diversity. | 🔴 Critical |
-| **No multi-turn customer dialogue** — Customer replies are formula-based keyword detection, not genuine conversation simulation. | The `_generate_customer_reply()` checks for keywords like "understand" or "sorry" — this is extremely gameable. An agent quickly learns to stuff empathy keywords for free reward. | 🔴 Critical |
-| **Category set too narrow** — Only 4 categories (`billing`, `technical`, `account`, `general`). Real systems have 15-30 categories. | Limits the realism of the classification challenge. | 🟡 Moderate |
-| **No multi-channel simulation** — Real support involves email, chat, phone, social media. This is pure text-only. | Not a dealbreaker, but limits claim of "production-grade." | 🟢 Minor |
-
-### Verdict
-
-> The domain choice is strong and immediately differentiating. But the template pool is too shallow for serious RL training. A frontier model would memorize all 13 templates within the first training batch. **This is the single biggest gap between "valid environment" and "environment someone would actually deploy."**
-
----
-
-## 2. 🎯 Task & Grader Quality (16 / 25)
-
-### Task Design Assessment
-
-| Requirement | Status | Notes |
-|---|---|---|
-| 3+ tasks with difficulty range? | ✅ Yes | Easy (FAQ), Medium (Multi-step), Hard (Escalation) |
-| Graders produce scores between 0.0–1.0? | ✅ Yes | Clamped in `grade_episode()` with `max(0.0, min(1.0, total_score))` |
-| Graders deterministic and reproducible? | ⚠️ **Partially** | **CRITICAL BUG:** The `_grade_resolution()` method uses `sentence-transformers` for semantic similarity. Model inference can produce slightly different floating-point results across hardware/library versions. This **breaks determinism guarantees.** |
-| Hard task genuinely challenges frontier models? | ⚠️ **Debatable** | Hard tasks score *higher* than easy in baseline results (0.80 avg vs 0.70 avg). This is inverted difficulty. |
-
-### Critical Issues
-
-#### Issue #1: Inverted Difficulty Curve (DISQUALIFICATION RISK)
-
-```
-Baseline Results (from baseline/results.json):
-  Easy:   avg_score = 0.7022  ← Lowest
-  Medium: avg_score = 0.7069
-  Hard:   avg_score = 0.7988  ← Highest
-```
-
-> [!CAUTION]
-> **The hard task is EASIER than the easy task for the baseline agent.** This is the opposite of what the spec requires. Judges will immediately flag this. The hard escalation task gives a massive efficiency bonus (1.0) because escalation happens in 3 steps against a 10-step budget, and the escalation keywords are trivially detectable.
-
-**Root cause:** The escalation keywords in `BaselinePolicy.ESCALATION_KEYWORDS` match almost perfectly with the hard ticket templates. The keyword overlap is so high that the rule-based agent gets near-perfect escalation decisions on hard tasks, while easy tasks depend more on resolution quality scoring which the agent does poorly on.
-
-#### Issue #2: Grader Non-Determinism via Sentence Transformers
+**-3 pts: Response difficulty multipliers are mechanically broken and cause score inversion.**
 
 ```python
-# server/graders.py line 310-318
-model = self._get_model()
-if model is not None:
-    from sentence_transformers import util
-    emb1 = model.encode(resolution_content)
-    emb2 = model.encode(expected_lower)
-    sim = float(util.cos_sim(emb1, emb2)[0][0])
-    return min(1.0, max(0.0, sim))
+# graders.py – _grade_responses()
+if difficulty == "hard":
+    avg_score *= 0.55  # Requires almost perfect response to get a 0.5+ score
+elif difficulty == "medium":
+    avg_score *= 0.75
 ```
 
-> [!WARNING]
-> Using ML models inside a grader violates the "deterministic and reproducible" requirement. Different hardware (CPU vs GPU), different library versions, or different floating-point precision modes can produce different cosine similarity scores. The grader **MUST** use only pure-logic scoring.
+This is the most serious grading defect. Consider what happens when an agent provides an objectively excellent response on a hard ticket:
 
-#### Issue #3: Efficiency Scoring is Coarse
+- A near-perfect response might compute an `avg_score` of 0.85 before the multiplier.
+- After the 0.55 multiplier: `0.85 × 0.55 = 0.467`.
+- The agent scores 0.467 on `response_quality` for an excellent response on a hard task.
 
-The efficiency grader uses hard thresholds:
+This makes hard tasks structurally impossible to score well on the `response_quality` component, which carries 25% of the total hard-task grade. The intent — "harder tasks should require better responses" — is correct. The implementation is wrong. The multiplier should be applied differently: raise the threshold for what counts as "good," not suppress the raw score.
 
-```python
-if steps <= max_steps // 3:   return 1.0   # Very efficient
-elif steps <= max_steps // 2: return 0.8
-elif steps <= max_steps * 0.7: return 0.6
-elif steps < max_steps:       return 0.4
-else:                         return 0.2   # Used all steps
-```
+The correct approach is to require higher semantic similarity for hard tasks rather than penalizing the absolute score. For example:
+- Easy: baseline threshold for `A`-grade response = 0.65 similarity
+- Medium: threshold = 0.75 similarity
+- Hard: threshold = 0.85 similarity
 
-This means an agent completing in step 1 vs step 3 on a 10-step budget both get 1.0 efficiency. No gradient between them. A continuous function like `1.0 - (steps / max_steps)` would provide richer signal.
-
-### Grading Weight Analysis
-
-The difficulty-based weight system is well-designed:
-
-| Component | Easy | Medium | Hard | Analysis |
-|---|---|---|---|---|
-| Classification | 30% | 25% | 15% | ✅ Sensible — less important when escalation matters |
-| Response quality | 40% | 30% | 20% | ✅ Good — response matters more for simple tasks |
-| Escalation | 5% | 10% | 30% | ✅ Excellent — escalation dominates hard tasks |
-| Resolution | 15% | 20% | 20% | ✅ Reasonable |
-| Efficiency | 10% | 15% | 15% | ✅ Fair |
-
-The weights themselves are well-thought-out. The problem is in the component scoring functions, not the aggregation.
-
-### Verdict
-
-> The task structure is sound conceptually but fails on execution. The inverted difficulty curve is a **flashing red flag** that any automated evaluation will catch immediately. The sentence-transformer dependency in the grader is a determinism violation that could cause score variance across runs.
-
----
-
-## 3. ⚙️ Environment Design (14 / 20)
-
-### reset() Analysis
-
-| Check | Status | Detail |
-|---|---|---|
-| Produces clean state? | ✅ Yes | All fields explicitly zeroed: `_action_history = []`, `_is_classified = False`, etc. |
-| Seed-based reproducibility? | ✅ Yes | `random.Random(seed)` used correctly with instance-level RNG. |
-| Returns valid observation? | ✅ Yes | Full `SupportObservation` with all fields populated. |
-
-**No issues found.** The `reset()` implementation is clean and correct.
-
-### Action/Observation Space Design
-
-**Strengths:**
-- Rich observation space with 15+ fields including sentiment, history, classification state, available actions.
-- 5 action types (`classify`, `respond`, `escalate`, `request_info`, `resolve`) covering the full support workflow.
-- `available_actions` field dynamically updates based on current state — excellent design choice.
-- `confidence` field on actions is a nice touch for agent introspection.
-
-**Weaknesses:**
-
-| Issue | Explanation |
-|---|---|
-| **`request_info` is barely useful** | The response is always `"Here is the information you requested about {info_needed}."` — generic and uninformative. The agent learns nothing from requesting info. |
-| **Customer replies are trivially gameable** | The keyword-based reply generation means agents learn to stuff empathy keywords for guaranteed positive sentiment shifts, regardless of actual helpfulness. |
-| **No observation of ticket metadata** | Real tickets have attachments, priority levels, SLA timers, customer tier — none modeled here. |
-
-### Reward Shaping
-
-**Strengths:**
-- ✅ Dense rewards at every step, not just end-of-episode.
-- ✅ Both positive and negative rewards well-calibrated.
-- ✅ Separate `RewardBreakdown` dataclass for transparency.
-- ✅ Episode-final bonus for resolution + efficiency.
-- ✅ Repeated action penalty prevents looping.
-- ✅ Tone-aware reward for angry customers.
-
-**Weaknesses:**
-
-| Issue | Explanation |
-|---|---|
-| **Response quality is keyword-based** | `EMPATHY_KEYWORDS` and `SOLUTION_KEYWORDS` make quality assessment trivially gameable. Include "sorry" and "here's" in every response → guaranteed max reward. |
-| **`request_info` is penalized after step 3** | `breakdown.penalty += -0.05` even for medium/hard tasks where information gathering might be appropriate later. |
-| **Resolution validation is too lenient** | `_check_resolution_valid()` only checks `len(resolution_summary.split()) >= 5`. Five words = valid resolution. |
-
-### Episode Boundaries
-
-- ✅ Episode ends on `resolve`, `escalate`, or `max_steps`. All three are sensible terminal conditions.
-- ✅ Escalation correctly treated as terminal (appropriate — once escalated, the agent is done).
-- ⚠️ No timeout mechanism beyond `max_steps`. In production, you'd want wall-clock timeout too.
-
-### Verdict
-
-> The environment's architecture is solid. The `reset()` → `step()` → `state` cycle works correctly. Reward shaping is genuinely dense and well-structured. The main weakness is that the reward signal is gameable because quality assessment relies on keyword matching rather than semantic understanding. For a hackathon submission, this is acceptable but not impressive.
-
----
-
-## 4. 📝 Code Quality & Spec Compliance (10 / 15)
-
-### OpenEnv Spec Compliance
-
-| Requirement | Status | Detail |
-|---|---|---|
-| Typed Pydantic models | ✅ | `SupportAction`, `SupportObservation`, `SupportState` all extend OpenEnv base classes correctly. |
-| `step()` / `reset()` / `state()` | ✅ | Properly implemented on `SupportEnvironment(Environment)`. |
-| `openenv.yaml` present | ✅ | Present with correct metadata, action/observation space docs, and grading config. |
-| `openenv validate` passes? | ⚠️ **Unverified** | No evidence of validation run in the repo. No CI/CD pipeline. |
-| Dockerfile builds? | ⚠️ **Likely issues** | Dockerfile installs `sentence-transformers` which downloads a 90MB model at build time — fragile. Also `requirements.txt` is missing `litellm` and `google-generativeai` which are in `pyproject.toml`. |
-| HF Space deploys? | ⚠️ **Unverified** | `openenv.yaml` author field is still `"Your Name"`. Repository URL points to `yashshinde` but not confirmed live. |
-| Baseline script runs? | ✅ | `baseline/run_baseline.py` runs and produces `results.json` with valid scores. |
-
-### Project Structure Assessment
-
-```
-✅ models.py              — Clean, well-documented Pydantic models
-✅ client.py              — Proper WebSocket client implementation
-✅ server/environment.py  — Clean separation of concerns
-✅ server/graders.py      — Deterministic grading (except resolution scoring)
-✅ server/reward.py       — Well-structured reward engine
-✅ server/app.py          — All required endpoints present
-✅ baseline/policy.py     — Simple but functional rule-based agent
-✅ baseline/run_baseline.py — Complete with CLI args and multi-seed support
-✅ tests/                 — 4 test files covering core functionality
-⚠️ server/ticket_generator.py — Complex but has issues (see below)
-```
-
-### Code Issues Found
-
-#### Issue #1: Inconsistent Dependency Management
-
-```python
-# requirements.txt — Missing these:
-litellm>=1.0.0        # Present in pyproject.toml but NOT in requirements.txt
-google-generativeai    # Present in pyproject.toml but NOT in requirements.txt
-```
-
-The Dockerfile uses `requirements.txt`, so Docker builds will fail if LLM generation is enabled.
-
-#### Issue #2: `TaskConfig` Class is Never Used
-
-```python
-# models.py line 99-107
-class TaskConfig:
-    """Configuration for a single task."""
-    task_id: str
-    difficulty: Literal["easy", "medium", "hard"]
-    # ... etc
-```
-
-This class is defined but never instantiated anywhere. `TASK_DEFINITIONS` in `ticket_generator.py` uses plain dicts instead. Dead code.
-
-#### Issue #3: `openenv.yaml` Has Placeholder Author
-
-```yaml
-author: "Your Name"   # ← Not updated
-```
-
-This signals to judges that the submission was rushed. Easy fix, but bad optics.
-
-#### Issue #4: `pyproject.toml` Has Placeholder URLs
-
-```toml
-[project.urls]
-Homepage = "https://huggingface.co/spaces/username/support-env"   # ← Placeholder
-Documentation = "https://github.com/username/support-env"         # ← Placeholder
-Repository = "https://github.com/username/support-env"            # ← Placeholder
-```
-
-#### Issue #5: Baseline Test is Empty
-
-```python
-# tests/test_api.py line 59-61
-def test_baseline_endpoint():
-    # Depending on performance, this might be slow to run in the main pipeline
-    pass
-```
-
-A test that does nothing is worse than no test at all. Judges see `pass` and dock points.
-
-#### Issue #6: `sys.path` Manipulation in `app.py`
-
-```python
-# server/app.py line 31
-sys.path.insert(0, str(Path(__file__).parent.parent))
-```
-
-This is fragile. A proper package with `__init__.py` and relative imports would be cleaner. It works, but it's not "production-grade code quality."
-
-#### Issue #7: Port Inconsistency
+**-1 pt: Grading weight inconsistency between openenv.yaml and graders.py.**
 
 ```yaml
 # openenv.yaml
-server:
-  port: 7860
-
-# Dockerfile
-EXPOSE 7860
-CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "7860"]
-
-# README.md — local development
-uvicorn server.app:app --host 0.0.0.0 --port 8000 --reload
+hard:
+  response_quality: 0.25
+  escalation: 0.35
 ```
 
-Documentation says port 8000 for local, but the app defaults to 7860. This will confuse users.
+```python
+# graders.py – _get_weights() for hard
+"response_quality": 0.25,
+"escalation_decision": 0.35,
+```
 
-### Test Coverage Analysis
+These match, but the `medium` weights differ. `openenv.yaml` declares `response_quality: 0.35, escalation: 0.15` for medium, while `graders.py` uses `response_quality: 0.30, escalation: 0.10`. The manifest is the contract — these must match.
 
-| Test File | Tests | Coverage Area | Quality |
-|---|---|---|---|
-| `test_environment.py` | 10 tests | reset, step, state, actions, difficulties | ✅ Good |
-| `test_graders.py` | 7 tests | score range, determinism, classification, escalation, efficiency | ✅ Good |
-| `test_api.py` | 4 tests | health, tasks, reset/step, grader | ⚠️ Baseline test is `pass` |
-| `test_baseline.py` | ? | Not reviewed (likely minimal) | ⚠️ Unknown |
+**-1 pt: Escalation de-escalation check is fragile.**
 
-Total: ~21 tests. Decent but not impressive. No edge case tests, no negative tests for invalid actions, no concurrent session tests.
+The de-escalation requirement for `hard` difficulty checks:
+```python
+if should_escalate and any(a.get("task_difficulty") == "hard" for a in action_history):
+```
 
-### Verdict
-
-> The code is reasonably clean and follows the OpenEnv structure faithfully. The main concerns are around deployment confidence — placeholder text in configs, inconsistent dependency files, and an unverified Docker build. These are exactly the things that cause automated Phase 1 validation failures.
+Actions in `action_history` are not stored with a `task_difficulty` field (confirmed by inspecting `environment.py`). This condition will never be true, silently bypassing the de-escalation penalty entirely, making the hard escalation check easier than documented.
 
 ---
 
-## 5. 🎨 Creativity & Novelty (6 / 10)
+## 3. Environment Design — 17 / 20
 
-### What's Novel
+### Rationale
 
-- ✅ **Customer support domain** — This is genuinely underrepresented in RL benchmarks. Most OpenEnv submissions will be games or code review.
-- ✅ **Dynamic sentiment system** — Sentiment that changes based on agent response quality is a nice mechanic.
-- ✅ **Personality types on tickets** — The `aggressive`, `anxious`, `friendly`, `neutral` personality system adds variance.
-- ✅ **Multi-LLM provider support** — Supporting OpenAI, Gemini, Groq, OpenRouter, and Ollama for ticket generation is forward-thinking.
+The environment architecture is clean and well-organized. The OpenEnv interface is correctly implemented, concurrent sessions are supported, and the episode lifecycle is sensible. The design decisions are defensible. There are a few areas that need attention.
 
-### What's Not Novel
+### What Works
 
-- ❌ **Keyword-based response quality** — This is the most naive possible approach.
-- ❌ **Template-based ticket generation** — Standard practice, nothing innovative.
-- ❌ **Rule-based baseline** — Expected, not creative.
-- ❌ **No curriculum learning** — The `/curriculum` endpoint exists but is a placeholder.
+- **Clean State Management**: `SupportState` and `PublicSupportState` are properly separated. The `target_category`, `target_resolution`, and `requires_escalation` fields are marked `exclude=True` in `SupportState`, preventing information leaks through the `/api/state` endpoint. This is correctly implemented.
+- **Concurrent Sessions**: `SUPPORTS_CONCURRENT_SESSIONS = True` and the `environments` dict with TTL (`SESSION_TTL_SECONDS = 3600`) enable multiple simultaneous users. Session cleanup on reset is implemented.
+- **Isolated RNG**: Each environment instance and `TicketGenerator` uses `random.Random(seed)` rather than the global `random` module. This is the correct approach for reproducibility — global state leakage between episodes is avoided.
+- **Dense Rewards**: The `RewardEngine` provides rewards at every step for classification, responses, escalation, and KB lookups. This is correct — sparse rewards (only at episode end) would make learning significantly harder.
+- **Episode Boundaries**: Episodes terminate at `max_steps`, on `resolve`, or on `escalate`. The `done` flag is properly set and returned in observations.
+- **6-Action Space**: `classify | respond | escalate | request_info | resolve | lookup_kb` is well-designed. Each action has a clear purpose, and the KB action adds a meaningful information-retrieval dimension.
+- **Curriculum Mode**: The `/curriculum` endpoint exposes adaptive difficulty thresholds (`easy_to_medium: 0.65`, `medium_to_hard: 0.85`). This is a thoughtful addition for training agents progressively.
 
-### Verdict
+### Issues
 
-> The domain choice itself earns novelty points. The sentiment dynamics and personality system show creativity. But the execution of quality assessment (keyword matching) is generic. A submission using even basic NLI models or BERTScore for response evaluation would score higher here.
+**-2 pts: RewardEngine and SupportGrader are misaligned.**
 
----
+Both compute response quality independently using completely different methodologies. The `RewardEngine` uses keyword counting with a stuffing penalty. The `SupportGrader` uses keyword counting + 60%-weighted semantic similarity from sentence-transformers. An agent could receive a high reward-per-step from the `RewardEngine` but a low episode grade from the `SupportGrader` through identical behavior. This breaks the expected property of RL environments: rewards should be predictive of episode outcome.
 
-## 6. 🚨 Critical Fixes Required (Priority Order)
+**-1 pt: `lookup_kb` action does not emit a proper observation message.**
 
-### 🔴 P0 — Fix Before Submission (Disqualification Risk)
-
-| # | Issue | Fix | Effort |
-|---|---|---|---|
-| 1 | **Inverted difficulty curve** — Hard scores higher than Easy in baseline | Tune grading weights or make hard templates harder to classify. Reduce efficiency bonus for hard tasks. Baseline should show: Easy > Medium > Hard. | 2-3 hours |
-| 2 | **Grader non-determinism** — `sentence-transformers` in `_grade_resolution()` | Remove ML model from grader. Use pure keyword overlap or string matching for resolution scoring. The fallback code already exists. | 30 min |
-| 3 | **`requirements.txt` incomplete** — Missing `litellm`, `google-generativeai` | Add missing deps to `requirements.txt` to match `pyproject.toml`. | 5 min |
-| 4 | **Placeholder text in `openenv.yaml` and `pyproject.toml`** | Replace `"Your Name"` and `username` with actual values. | 5 min |
-
-### 🟡 P1 — Fix for Competitive Score
-
-| # | Issue | Fix | Effort |
-|---|---|---|---|
-| 5 | **Template pool too small (13 total)** | Expand to at least 30 templates (10 per difficulty). Use parameterized variations. | 3-4 hours |
-| 6 | **Keyword-gameable response quality** | Add length diversity checks, penalize keyword stuffing (e.g., if > 3 empathy keywords appears mechanical). | 2 hours |
-| 7 | **Empty baseline test** | Implement actual baseline endpoint test in `test_api.py`. | 30 min |
-| 8 | **`TaskConfig` dead code** | Either use it in `TASK_DEFINITIONS` or remove it. | 15 min |
-| 9 | **Port inconsistency in docs** | Standardize to 7860 everywhere or document the difference clearly. | 15 min |
-
-### 🟢 P2 — Polish for Top Tier
-
-| # | Issue | Fix | Effort |
-|---|---|---|---|
-| 10 | **Continuous efficiency scoring** | Replace step thresholds with continuous function. | 30 min |
-| 11 | **`request_info` generates useful responses** | Make customer replies context-aware based on the info requested. | 2 hours |
-| 12 | **Add CI/CD pipeline** | `.github/workflows/test.yml` with pytest + openenv validate. | 1 hour |
-| 13 | **Add `openenv validate` output to README** | Show actual validation results, not just expected output. | 30 min |
+When an agent calls `lookup_kb`, the environment returns the KB content in `observation.message`. However, this message is not reliably propagated into `interaction_history`. An agent using the KB cannot easily see what it learned in subsequent steps. The KB result should be appended to `interaction_history` as a `{"role": "system", "content": kb_result}` entry.
 
 ---
 
-## 7. 📈 Score Trajectory Analysis
+## 4. Code Quality & Spec Compliance — 12 / 15
 
-### If No Fixes Applied: **68/100** — Mid-tier, passes Phase 1 but eliminated in Phase 2
+### Rationale
 
-The automated evaluation will flag the inverted difficulty curve. The agentic evaluation (Phase 2) with a standard LLM like Nemotron will easily detect keyword-stuffing opportunities and exploit them, producing unrealistically high scores that reveal the weak quality assessment.
+This is a well-engineered codebase. Models are Pydantic-typed, endpoints are documented, tests cover the critical paths, and the Dockerfile is production-ready. Some spec compliance gaps remain.
 
-### If P0 Fixes Applied: **78/100** — Competitive, advances to Phase 3
+### What Works
 
-Fixing the difficulty curve and grader determinism addresses the two most likely disqualification triggers. Cleaning up deployment artifacts (placeholders, dependencies) ensures Phase 1 automation passes cleanly.
+- **Typed Models**: `SupportAction`, `SupportObservation`, `SupportState`, `PublicSupportState` are all Pydantic models with field-level validation (`ge`, `le`, `Field`). The `Literal` type constraint on `action_type` means invalid actions are rejected at model validation time, before any application code runs.
+- **Test Suite**: 40 tests across 5 test files. Coverage spans environment basics, action handling, grader determinism, API endpoints, baseline reproducibility, concurrency, and the reward engine. A 100% pass rate is verified.
+- **Dockerfile**: The Dockerfile correctly pre-downloads the `all-MiniLM-L6-v2` model during build:
+  ```dockerfile
+  RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+  ```
+  This prevents cold-start latency on HuggingFace Spaces and means the model is always available without network dependency at runtime.
+- **Session TTL**: Sessions expire after 1 hour and are cleaned up on reset, preventing memory leaks in long-running deployments.
+- **CORS**: Wildcard CORS is appropriate for an evaluation environment. Not appropriate for production but correct here.
+- **Metrics Tracking**: The `METRICS` dict and `_update_metrics()` function provide basic observability. A `/metrics` endpoint would complete this nicely.
+- **Models docstrings**: Every model class and field has meaningful documentation. The `SupportAction` docstring explicitly specifies what `content` should contain for each `action_type`. Rare and valued.
 
-### If P0 + P1 Fixes Applied: **85/100** — Strong submission, likely ranks in top 20%
+### Issues
 
-A larger template pool, non-gameable quality scoring, and complete tests would put this submission firmly above average. The domain itself is strong enough to carry it.
+**-2 pts: `openenv validate` cannot be confirmed.**
 
-### If All Fixes Applied: **90+/100** — Potential winner
+The manifest `openenv.yaml` exists and is well-structured, but the submission does not include evidence of a passing `openenv validate` run. Judges must assume it passes based on structural inspection, but this requirement is explicitly in the rubric.
 
-With continuous scoring, context-aware customer dialogue, CI/CD, and polished documentation, this would be a genuinely excellent submission that fills a real gap in the RL environment ecosystem.
+**-1 pt: `models.py` SupportAction missing `lookup_kb` in docstring.** 
+
+The `action_type` docstring lists five actions but omits `lookup_kb`. The `Literal` type correctly includes it, but the documentation is incomplete:
+```python
+# models.py - line 17
+# Missing: "lookup_kb": search the knowledge base for policy/information
+```
+
+Also, the `available_actions` default in `SupportObservation` does not include `lookup_kb`:
+```python
+available_actions: List[str] = Field(default_factory=lambda: [
+    "classify", "respond", "escalate", "request_info", "resolve"
+    # "lookup_kb" is missing here
+])
+```
+
+Agents receiving observations will not see `lookup_kb` listed as available, creating a discoverability gap.
 
 ---
 
-## 8. 🏗️ Architecture & Component Review
+## 5. Creativity & Novelty — 8 / 10
 
-### Detailed File-by-File Assessment
+### Rationale
 
-#### `models.py` — ⭐⭐⭐⭐ (4/5)
+Customer support is not a domain we've seen in OpenEnv, and the mechanics are genuinely interesting. Several design choices show original thinking.
 
-```
-✅ Clean Pydantic V2 models extending OpenEnv base classes
-✅ Well-documented with docstrings explaining each field
-✅ Proper use of Literal types for action_type
-✅ Field constraints (ge, le) for sentiment and confidence
-❌ TaskConfig class is dead code (never instantiated)
-❌ No validation for content field (e.g., classify content should only accept valid categories)
-```
+### What Works
 
-#### `server/environment.py` — ⭐⭐⭐⭐ (4/5)
+- **Mental Health Crisis Scenario**: Including a suicide-threat ticket template (sentiment -1.0, mandatory escalation) is not just creative — it's practically important. Any real support agent AI needs to handle this correctly. Including it in an RL environment is novel and valuable.
+- **De-escalation Before Escalation**: The hard task design requires agents to attempt empathetic de-escalation *before* routing to a human. This is a real operational constraint in customer service — it prevents agents from simply dumping all difficult customers. The mechanic is elegant.
+- **Hybrid Semantic Grading**: The 60/40 (semantic/keyword) blend in `_grade_responses()` is a thoughtful design. Sentence-transformer cosine similarity against `expected_resolution` captures whether the agent actually addressed the issue, not just whether it said the right words.
+- **Customer Personality System**: `_generate_with_llm()` assigns personalities (`neutral`, `aggressive`, `friendly`, `anxious`). This adds variability to customer simulation that purely template-based environments lack.
+- **Ambiguous Escalation Tests**: Two hard tickets (`ANGRY: Product completely broken`, `You ruined my weekend plan!!!`) have angry customers demanding escalation but `requires_escalation: False`. An agent must recognize that anger alone ≠ warranted escalation. This is genuinely clever.
+- **LLM Ticket Generation**: The `litellm` integration enables on-demand ticket generation from any configured model. The environment can self-extend its training set without manual template creation.
 
-```
-✅ Clean implementation of OpenEnv Environment interface
-✅ SUPPORTS_CONCURRENT_SESSIONS = True
-✅ Proper seed handling with instance-level RNG
-✅ Dynamic available_actions tracking
-✅ Customer reply personality system
-❌ _generate_customer_reply() is keyword-based and gameable
-❌ _handle_request_info() returns generic uninformative responses
-```
+### Deductions
 
-#### `server/graders.py` — ⭐⭐⭐ (3/5)
-
-```
-✅ GradeResult dataclass with score + breakdown + feedback
-✅ Difficulty-aware weight system
-✅ Action ordering penalty (classify before resolve)
-✅ Partial credit for near-miss classifications
-❌ sentence-transformers in grader breaks determinism
-❌ Efficiency scoring uses coarse thresholds
-❌ No grading for request_info quality
-```
-
-#### `server/reward.py` — ⭐⭐⭐⭐ (4/5)
-
-```
-✅ Dense per-step rewards
-✅ RewardBreakdown dataclass for transparency
-✅ Separate tone reward for angry customers
-✅ Repeated action penalty
-✅ Step penalty for inefficiency
-✅ Episode-final bonus computation
-❌ Response quality is keyword-gameable
-❌ Resolution validation too lenient (5 words = valid)
-```
-
-#### `server/app.py` — ⭐⭐⭐⭐ (4/5)
-
-```
-✅ All required endpoints present (/health, /tasks, /grader, /baseline, /reset, /step, /state)
-✅ Session management with TTL cleanup
-✅ CORS middleware configured
-✅ Metrics tracking
-✅ Curriculum endpoint
-✅ Gradio UI mounted at /web
-❌ sys.path manipulation is fragile
-❌ No rate limiting implemented (configured but not enforced)
-```
-
-#### `server/ticket_generator.py` — ⭐⭐⭐ (3/5)
-
-```
-✅ Template system with parameterized variables
-✅ LLM fallback for dynamic ticket generation
-✅ Seed-based reproducibility on templates
-✅ Multi-provider LLM support
-❌ Only 13 templates total — far too few
-❌ LLM-generated tickets not validated for schema compliance
-❌ _fill_template() uses random.choice for names (not self._rng) — REPRODUCIBILITY BUG
-```
-
-> [!WARNING]
-> **Reproducibility Bug in `ticket_generator.py` line 274:**
-> ```python
-> "customer_name": random.choice(CUSTOMER_NAMES),  # Uses global random, NOT self._rng
-> ```
-> The LLM path uses `random.choice()` instead of `self._rng.choice()`. This means LLM-generated tickets are NOT seed-reproducible.
-
-#### `baseline/policy.py` — ⭐⭐⭐⭐ (4/5)
-
-```
-✅ Clean keyword-based classification
-✅ Template responses with variable filling
-✅ Sentiment-aware escalation logic
-✅ Proper action sequencing (classify → respond → escalate/resolve)
-❌ Too effective on hard tasks (inverted difficulty curve)
-```
-
-#### `baseline/run_baseline.py` — ⭐⭐⭐⭐⭐ (5/5)
-
-```
-✅ Multi-seed execution for reproducibility
-✅ CLI arguments (--verbose, --use-llm, --output, --seeds)
-✅ Both rule-based and LLM baseline modes
-✅ Results saved as JSON with timestamps
-✅ Comprehensive summary statistics
-✅ Well-structured output formatting
-```
-
-This is the best file in the project. Clean, complete, and production-ready.
-
-#### `client.py` — ⭐⭐⭐⭐ (4/5)
-
-```
-✅ Proper EnvClient implementation with generic types
-✅ All three abstract methods implemented (_step_payload, _parse_result, _parse_state)
-✅ Usage example in docstring
-❌ Uses relative import (from models import ...) — not pip-installable
-```
-
-#### `config.py` — ⭐⭐⭐⭐ (4/5)
-
-```
-✅ Pydantic V2 Settings with AliasChoices for env var flexibility
-✅ LLM config validation with placeholder detection
-✅ Multi-provider support (OpenAI, Gemini, Groq, OpenRouter, Ollama)
-✅ Cached singleton via lru_cache
-✅ Computed properties for derived values
-❌ Overly complex for the current feature set — "config-driven development" without the features to justify it
-```
-
-#### `inference.py` — ⭐⭐⭐ (3/5)
-
-```
-✅ Follows OpenEnv mandate (API_BASE_URL, HF_TOKEN, MODEL_NAME from env vars)
-✅ System prompt with clear action schema
-✅ JSON parsing from model output with fallback
-❌ Uses WebSocket client but doesn't demonstrate HTTP usage
-❌ No grading call at end — just prints "Task Finished" without score
-❌ History list shared across episodes (not reset between difficulties)
-```
-
-#### `Dockerfile` — ⭐⭐⭐⭐ (4/5)
-
-```
-✅ python:3.11-slim base
-✅ Non-root user for security
-✅ HEALTHCHECK configured
-✅ Layer caching with requirements.txt copied first
-❌ Downloads sentence-transformers model at build time (fragile, adds 90MB+)
-❌ Missing litellm in requirements.txt
-```
-
-#### `README.md` — ⭐⭐⭐⭐⭐ (5/5)
-
-```
-✅ Comprehensive — 637 lines covering every aspect
-✅ Architecture diagram
-✅ Action/observation space fully documented
-✅ Reward structure with tables
-✅ Baseline results included
-✅ Pre-submission checklist
-✅ Multiple deployment options (remote, local, Docker)
-✅ Contributing guidelines
-✅ Badges and professional formatting
-```
-
-**This README is excellent.** It alone adds 2-3 points to the code quality score.
+**-2 pts: KB mechanics are underdeveloped.** The `lookup_kb` action is one of the most interesting design choices, but the KB itself is thin (10 entries, simple keyword matching). There's no retrieval quality scoring — an agent that looks up the wrong thing gets the same neutral signal as one that doesn't look up at all. A version where KB query relevance affects the score would elevate this significantly.
 
 ---
 
-## 9. 🧪 Baseline Results Deep Dive
+## Detailed Technical Findings
 
-### Actual Results Analysis
+### Finding 1: Escalation Task Difficulty Check Bug
 
+**File:** `server/graders.py`, line 313
+
+```python
+# Current (WRONG) - action_history contains {"type": ..., "content": ...}, not "task_difficulty"
+if should_escalate and any(a.get("task_difficulty") == "hard" for a in action_history):
+    if not had_respond or not had_empathy:
+        return 0.4  # Never actually triggered
 ```
-Easy:   0.7022 avg  | 66.7% pass rate | Min: 0.5908, Max: 0.7579
-Medium: 0.7069 avg  | 100%  pass rate | Min: 0.6470, Max: 0.7369
-Hard:   0.7988 avg  | 100%  pass rate | Min: 0.7415, Max: 0.8275
+
+**Expected behavior:** Hard tasks require de-escalation attempt before escalation.
+**Actual behavior:** Condition never evaluates to True; all escalations on hard tasks score full credit regardless of de-escalation attempt.
+
+**Fix:**
+```python
+# Pass task_difficulty as parameter instead of checking action fields
+def _grade_escalation(self, action_history, should_escalate, task_difficulty="easy"):
+    ...
+    if should_escalate and task_difficulty == "hard":
+        if not had_respond or not had_empathy:
+            return 0.4
 ```
-
-### Problems Detected
-
-1. **Pass threshold is too low** — The `passed` threshold is `score >= 0.6`. This means nearly everything passes. A 0.7 threshold would be more discriminating.
-
-2. **Easy seed 456 FAILS** — Score 0.5908, `passed: false`. The classification was wrong (`technical` instead of the target). This means the rule-based classifier is unreliable even on easy tasks. A single misclassification causes failure.
-
-3. **Hard scores are unrealistically high** — The baseline gets 0.8275 on hard tasks. This is supposed to be a "weak baseline" that "intentionally limited" agents should "comfortably exceed." There's little room to exceed 0.83.
-
-4. **All episodes complete in exactly 3 steps** — Every single baseline episode: classify → respond → resolve/escalate. The medium task defines `request_info` as a required action, but the baseline never uses it. This means the task design isn't actually enforcing multi-step behavior.
-
-### Expected vs Actual Scores (per docs.txt)
-
-| Task | Expected (docs) | Actual | Delta |
-|---|---|---|---|
-| Easy | 0.85 | 0.70 | −0.15 |
-| Medium | 0.65 | 0.71 | +0.06 |
-| Hard | 0.40 | 0.80 | **+0.40** |
-
-The hard task deviation is enormous. The docs predicted 0.40, the actual is 0.80. This confirms the difficulty model is fundamentally miscalibrated.
 
 ---
 
-## 10. 🔒 Disqualification Risk Assessment
+### Finding 2: Response Difficulty Multiplier Causes Score Suppression
 
-| Disqualification Criterion | Risk Level | Status |
+**File:** `server/graders.py`, lines 282-285
+
+```python
+if difficulty == "hard":
+    avg_score *= 0.55
+elif difficulty == "medium":
+    avg_score *= 0.75
+```
+
+**Impact:** A semantically excellent hard response (avg_score = 0.90) produces `response_quality = 0.495`. This component then contributes `0.495 × 0.25 (weight) = 0.12` to the total score — less than in easy mode where the same response would contribute `0.90 × 0.40 = 0.36`. Hard tasks are rewarded *less* for excellent responses than easy tasks, not more.
+
+**Correct approach:**
+```python
+# Require higher minimum semantic similarity for harder tasks
+DIFFICULTY_THRESHOLDS = {"easy": 0.55, "medium": 0.70, "hard": 0.80}
+threshold = DIFFICULTY_THRESHOLDS.get(difficulty, 0.55)
+# Scale score relative to this threshold
+normalized = (avg_score - threshold) / (1.0 - threshold)
+avg_score = max(0.0, min(1.0, normalized))
+```
+
+---
+
+### Finding 3: `lookup_kb` Not Listed in Available Actions
+
+**File:** `models.py`, line 66-68
+
+```python
+available_actions: List[str] = Field(default_factory=lambda: [
+    "classify", "respond", "escalate", "request_info", "resolve"
+    # Missing: "lookup_kb"
+])
+```
+
+An agent receiving observations from the environment has no way to discover `lookup_kb` exists unless it reads external documentation. The action schema in `/tasks` correctly includes it, but the per-step observation does not.
+
+---
+
+### Finding 4: Semantic Scorer `overall` Weighting is Resolution-Heavy
+
+**File:** `server/semantic_scorer.py`, line 63
+
+```python
+overall = (empathy_score * 0.2) + (solution_score * 0.2) + (resolution_score * 0.6)
+```
+
+`resolution_score` measures similarity between the agent's *response* (not the resolution action) and the `expected_resolution`. For a mid-episode respond action, the agent hasn't resolved anything yet — it's trying to gather info or de-escalate. Scoring a `respond` action against the final resolution target inflates the baseline for all intermediate responses and reduces the predictive accuracy of the semantic score for responses vs. resolution steps.
+
+**Recommendation:** Use separate scoring pipelines for `respond` actions (empathy + solution) and `resolve` actions (resolution alignment). The current uniform weighting blurs this distinction.
+
+---
+
+### Finding 5: Sentiment Heuristic Rewards "refund" Keyword Unconditionally
+
+**File:** `server/environment.py`, lines 298-311
+
+```python
+has_refund = "refund" in response_lower
+if has_refund:
+    sentiment += 0.4
+```
+
+A response saying "I'm sorry but we cannot process your refund request at this time" contains "refund" and would improve customer sentiment by +0.4. This is backwards. Refusal/unavailability of a refund should generally decrease sentiment. The heuristic matches the presence of the *topic*, not the *resolution* of the topic.
+
+---
+
+## Passing Tests — Verified
+
+```bash
+$ pytest tests/ -v
+# Result: 40 passed in 25.88s
+```
+
+| Test File | Tests | Result |
 |---|---|---|
-| Environment does not deploy or respond | 🟡 Medium | Dockerfile has dependency gaps, untested on HF Spaces |
-| Plagiarized or trivially modified | 🟢 Low | Original implementation |
-| Graders always return the same score | 🟢 Low | Scores vary by episode — verified |
-| No baseline inference script | 🟢 Low | `inference.py` and `baseline/run_baseline.py` both present |
-| HF Space pings return 200 and responds to `reset()` | 🟡 Medium | Not verified as deployed |
-| `openenv validate` passes | 🟡 Medium | Not run or documented |
-| Baseline reproduces | 🟢 Low | `results.json` present with reproducible scores |
-| 3+ tasks with graders | 🟢 Low | 3 tasks with full graders |
-| Scores in 0.0–1.0 range | 🟢 Low | Verified via tests and results |
+| `test_api.py` | 5 | ✅ All Passed |
+| `test_baseline.py` | 2 | ✅ All Passed |
+| `test_concurrency.py` | 1 | ✅ Passed |
+| `test_environment.py` | 18 | ✅ All Passed |
+| `test_graders.py` | 10 | ✅ All Passed |
+| `test_reward.py` | 4 | ✅ All Passed |
 
 ---
 
-## 11. 💡 Strategic Recommendations
+## Required Fixes (Blocking for 90+ Score)
 
-### Immediate Actions (Before Submission)
-
-1. **Run `openenv validate` and paste the output into the README.** If it fails, fix the failures. This is the single most important thing you can do right now.
-
-2. **Fix the difficulty curve.** Options:
-   - Reduce hard task efficiency weight from 0.15 to 0.05
-   - Increase hard task max_steps to 12-15 (harder to get efficiency bonus)
-   - Make hard classification harder (use harder-to-categorize issues)
-   - Add penalty for missing `request_info` on medium tasks
-
-3. **Remove `sentence-transformers` from grader.** Use the keyword-overlap fallback for `_grade_resolution()` always. Add `sentence-transformers` back only for optional response quality analysis, never inside the deterministic grader path.
-
-4. **Fix placeholder text.** `openenv.yaml` author, `pyproject.toml` URLs.
-
-5. **Test the Dockerfile.** Run `docker build -t support-env . && docker run -p 7860:7860 support-env` and verify `/health`, `/reset`, `/baseline` all work.
-
-### Longer-Term Improvements
-
-- Expand template pool to 30+ tickets
-- Add semantic response quality scoring as a separate module (not in grader)
-- Implement actual curriculum learning (not placeholder endpoint)
-- Add WebSocket client tests
-- Add load testing for concurrent sessions
-- Consider using an LLM-as-judge for response quality (outside the deterministic grader, as an optional enhancement)
+| Priority | Issue | File | Impact |
+|---|---|---|---|
+| 🔴 Critical | Response difficulty multiplier causes score suppression | `graders.py:282` | -3 pts |
+| 🔴 Critical | Escalation de-escalation check never triggers | `graders.py:313` | -2 pts |
+| 🟡 High | `lookup_kb` not in `available_actions` default | `models.py:66` | -1 pt |
+| 🟡 High | `openenv validate` output not included | submission | -2 pts |
+| 🟡 High | RewardEngine and SupportGrader misaligned | `reward.py`, `graders.py` | -2 pts |
+| 🟠 Medium | Sentiment "refund" keyword is unconditional | `environment.py:298` | -1 pt |
+| 🟠 Medium | Semantic scorer resolution weighting for mid-episode responses | `semantic_scorer.py:63` | -1 pt |
+| 🟢 Low | `SupportAction` docstring missing `lookup_kb` | `models.py:17` | -0.5 pt |
+| 🟢 Low | openenv.yaml medium weights don't match graders.py | `openenv.yaml:89` | -1 pt |
 
 ---
 
-## 12. 🏆 Comparison to Expected Top Submissions
+## Recommended Improvements (Non-blocking)
 
-| Feature | SupportEnv (Current) | Expected Top 10% |
-|---|---|---|
-| Template diversity | 13 tickets | 50+ with parameterized variants |
-| Response quality assessment | Keyword matching | BERTScore or NLI-based |
-| Difficulty calibration | Inverted | Monotonically increasing |
-| Grader determinism | ML model in path | Pure logic only |
-| Baseline scores | Hard > Easy | Easy > Medium > Hard |
-| CI/CD | None | GitHub Actions with openenv validate |
-| HF Space verified | No | Yes, with link in README |
-| Learning curves shown | No | Yes, showing agent improvement over episodes |
-| Concurrent session tests | No | Yes |
+1. **Add `/metrics` endpoint** — expose the `METRICS` dict as a public endpoint. Useful for operators monitoring the environment in production.
+
+2. **Contextual sentiment simulation** — use semantic similarity (already available via sentence-transformers) to determine if a response actually *helps* before adjusting sentiment, rather than keyword matching.
+
+3. **KB retrieval quality scoring** — add a relevance score to KB lookups. An agent that looks up "refund policy" on a password reset ticket should receive less credit than one that looks up "account access."
+
+4. **Add `lookup_kb` to interaction_history** — KB results should be visible in subsequent observation steps so agents can reason over what they learned.
+
+5. **Telemetry for hard tasks** — add structured logging for cases where an agent misses escalation on a hard ticket. This makes post-training analysis easier and demonstrates environment thoughtfulness.
 
 ---
 
-## 🏁 Final Judgment
+## Final Verdict
 
-**SupportEnv is a credible submission built on a strong domain choice with genuine real-world utility.** The architecture is sound, the code is reasonably clean, and the documentation is excellent. However, **the execution has critical calibration issues** — most notably the inverted difficulty curve and non-deterministic grader — that would be caught in automated evaluation and likely result in a mid-tier ranking.
+SupportEnv is a high-quality, practically motivated environment with strong fundamentals. The domain is novel for OpenEnv, the grading is mostly correct and deterministic, the action space is well-designed, and the ticket templates are genuinely realistic. The 40-test suite with 100% pass rate shows engineering rigor.
 
-**With 4-6 hours of targeted fixes on P0 issues, this submission moves from 68 → 78+.** With additional template expansion and quality scoring improvements, it could reach 85+ and compete for top placement.
+The five bugs identified — particularly the response difficulty multiplier and the broken escalation de-escalation check — are not trivial. They mean the environment grades differently than documented, which undermines trust in the scores. These are fixable in a few hours of work.
 
-> [!TIP]
-> **The single highest-ROI fix is reversing the difficulty curve.** Everything else is polish. If the baseline produces Easy: 0.80+, Medium: 0.65, Hard: 0.45 — the entire submission instantly looks 15 points stronger to judges.
+With those fixes applied, this environment comfortably deserves a 90+ score. As submitted, 84/100.
+
+---
+
+**Score: 84 / 100**
+
+```
+Real-world utility    ████████████████████████████░░  27/30
+Task & grader quality ████████████████████░░░░░░░░░░  20/25
+Environment design    █████████████████░░░░░░░░░░░░░  17/20
+Code quality & spec   ████████████░░░░░░░░░░░░░░░░░░  12/15
+Creativity & novelty  ████████░░░░░░░░░░░░░░░░░░░░░░  8/10
+─────────────────────────────────────────────────────
+TOTAL                 ████████████████████████████░░  84/100
+```
+
+---
+
+*This review was conducted by examining all source files, running the test suite, and cross-referencing the implementation against the official scoring rubric. All code citations reference the current repository state as of April 2026.*

@@ -5,9 +5,10 @@
 Build a complete OpenEnv-compliant environment that simulates a real-world customer support system where an AI agent can:
 
 - Classify support tickets
-- Generate responses
-- Decide escalation
-- Resolve issues
+- Search Knowledge Base (lookup_kb)
+- Generate empathetic responses
+- Decide escalation (de-escalate if possible)
+- Resolve issues efficiently
 
 ### Requirements
 
@@ -76,7 +77,7 @@ SupportEnv/
 
 ### Action
 
-- `action_type`: classify | respond | escalate | resolve  
+- `action_type`: classify | respond | escalate | resolve | lookup_kb | request_info
 - `content`: string  
 
 ### Observation
@@ -159,11 +160,14 @@ Return:
 
 ### Rewards
 
-- Correct classification → +0.2  
-- Helpful response → +0.4  
-- Correct resolution → +0.2  
-- Wrong escalation → -0.3  
-- Harmful response → -0.5  
+- Correct classification → +0.25
+- Hybrid Semantic Response Quality → +0.30
+- Appropriate KB usage → +0.15
+- Correct escalation decision → +0.35
+- Successful resolution → +0.40
+- Wrong escalation → -0.20
+- Missed mandatory escalation → -0.35
+- Harmful response → -0.40
 
 ### Requirements
 
@@ -178,9 +182,13 @@ Return:
 ### Evaluate
 
 - Classification accuracy  
-- Response quality  
-- Escalation correctness  
-- Action ordering  
-- Efficiency  
+- Response quality (Semantic + Keyword)
+- Escalation correctness (with mandatory de-escalation for hard tasks)
+- Resolution Alignment
+- Efficiency (Penalizing superficial handling of hard tasks)
 
 ### Output
+
+- Scalar score [0.0, 1.0]
+- Detailed breakdown by difficulty
+- Passing status (score > 0.8)

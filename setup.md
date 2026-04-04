@@ -217,9 +217,9 @@ python baseline/run_baseline.py
 
 | Difficulty | Expected Score |
 | --- | --- |
-| Easy | ~0.75 |
-| Medium | ~0.73 |
-| Hard | ~0.82 |
+| Easy | ~0.95 |
+| Medium | ~0.88 |
+| Hard | ~0.92 |
 
 Results are saved to `baseline/results.json`.
 
@@ -306,6 +306,7 @@ curl -X POST http://localhost:7860/grader \
 | `respond` | Send a response message to the customer |
 | `escalate` | Escalate to a senior agent / supervisor |
 | `request_info` | Ask the customer for more information |
+| `lookup_kb` | Search the knowledge base for a policy or information |
 | `resolve` | Mark the ticket as resolved |
 
 ---

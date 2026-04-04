@@ -204,6 +204,17 @@ class TestActions:
         
         assert obs.done is True
 
+    def test_lookup_kb_action(self):
+        """lookup_kb action should return a valid kb response."""
+        env = SupportEnvironment()
+        env.reset(seed=42)
+        
+        obs = env.step(SupportAction(action_type="lookup_kb", content="password"))
+        
+        assert obs.done is False
+        assert "KB Result for 'password'" in obs.message
+        assert "reset" in obs.message.lower()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

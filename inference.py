@@ -145,11 +145,24 @@ def main() -> None:
                         print("Episode complete.")
                         break
                 
-                # Final grade
-                grade_resp = conn.get_state() # Actually state doesn't have grade
-                # We should probably call the /grader endpoint specifically if needed
-                # But in typical OpenEnv, the server handles ending the episode and returning final info
-                print("Task Finished.")
+                # Final official grade
+                import requests
+                try:
+                    grader_url = f"{env_url}/grader"
+                    session_id = getattr(conn, 'session_id', getattr(result, 'session_id', None))
+                    grade_resp = requests.post(grader_url, json={"session_id": session_id})
+                    if grade_resp.status_code == 200:
+                        grade_data = grade_resp.json()
+                        print(f"\nFinal Official Grade")
+                        print(f"Score: {grade_data.get('score', 0.0):.4f}")
+                        print(f"Passed: {grade_data.get('passed', False)}")
+                        print(f"Feedback: {grade_data.get('feedback', '')}")
+                    else:
+                        print(f"Grader endpoint failed: {grade_resp.status_code}")
+                except Exception as e:
+                    print(f"Failed to fetch grade: {e}")
+                
+                print("\nTask Finished.")
                     
         except Exception as e:
             print(f"Episode failed: {e}")

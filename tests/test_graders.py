@@ -220,6 +220,27 @@ class TestEfficiencyGrading:
         
         assert result.breakdown["efficiency"] < 0.5
 
+    def test_fast_resolution_on_hard_mode_penalized(self):
+        """Quick resolution on hard mode should score low efficiency due to required deliberation."""
+        grader = SupportGrader()
+        
+        result = grader.grade_episode(
+            action_history=[
+                {"type": "classify", "content": "billing", "step": 1},
+                {"type": "resolve", "content": "Done", "step": 2}
+            ],
+            target_category="billing",
+            requires_escalation=False,
+            expected_resolution="Done",
+            task_difficulty="hard",
+            is_resolved=True,
+            total_steps=2,
+            max_steps=10
+        )
+        
+        # In hard mode, quick resolution signifies guessing or poor deliberation
+        assert result.breakdown["efficiency"] <= 0.6
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

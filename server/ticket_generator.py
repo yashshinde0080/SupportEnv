@@ -381,6 +381,32 @@ HARD_TICKETS = [
         difficulty="hard",
         keywords=["medical", "device", "FDA", "health", "safety", "malfunctioned"]
     ),
+    TicketTemplate(
+        category="technical",
+        subject="ANGRY: Product completely broken after 1 day!!!",
+        body="""I AM FURIOUS! I bought your {product} just YESTERDAY and it's already completely 
+        broken and won't turn on! I demanded to speak to a manager IMMEDIATELY but your awful phone system 
+        hung up on me. I want a refund RIGHT NOW or I will blast this all over social media. 
+        This is a scam company! Fix it now!!!""",
+        sentiment=-0.9,
+        expected_resolution="De-escalate the customer by apologizing and offering a straightforward replacement or refund per standard policy.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["angry", "broken", "refund", "scam", "manager"]
+    ),
+    TicketTemplate(
+        category="general",
+        subject="You ruined my weekend plan!!!",
+        body="""I am unbelievably disappointed. I ordered the {product} specifically for my 
+        event this weekend and it arrived a day late. You have ruined my entire schedule and 
+        embarrassed me in front of my guests. Do you have any idea how much stress this caused me? 
+        I demand compensation for this nightmare. Escalate this immediately!""",
+        sentiment=-0.8,
+        expected_resolution="Apologize empathetically for the delivery delay and offer standard compensation (e.g. shipping refund or store credit) without escalating to management.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["ruined", "late", "compensation", "escalate", "disappointed"]
+    ),
 ]
 
 CUSTOMER_NAMES = [
@@ -468,6 +494,7 @@ class TicketGenerator:
             "keywords": ticket_data["keywords"],
             "customer_name": self._rng.choice(CUSTOMER_NAMES),
             "customer_email": self._generate_email(),
+            "personality": self._rng.choice(["neutral", "aggressive", "friendly", "anxious"]),
         }
 
     def _generate_with_templates(self, difficulty: str, task_id: str = None) -> Dict[str, Any]:
@@ -515,11 +542,18 @@ class TicketGenerator:
             "{case_id}": f"CS-{self._rng.randint(10000, 99999)}",
             "{address}": f"{self._rng.randint(100, 999)} Unknown St, Some City",
             "{year}": str(self._rng.randint(2018, 2022)),
-            "{location}": self._rng.choice(["Downtown", "Mall", "Airport", "Main Street"]),
-            "{name}": self._rng.choice(["the manager", "a staff member", "the cashier"]),
-            "{attribute}": self._rng.choice(["appearance", "accent", "disability"]),
             "{emotion}": self._rng.choice(["deeply upset", "horrified", "traumatized"]),
             "{ref}": f"REF-{self._rng.randint(1000, 9999)}",
+            "{personal_info}": self._rng.choice(["SSN", "date of birth", "full name", "drivers license"]),
+            "{patient_id}": f"PT-{self._rng.randint(1000, 9999)}",
+            "{device}": self._rng.choice(["GlucoMeter X", "HeartMonitor Pro", "InsulinPump 2.0"]),
+            "{product}": self._rng.choice(["UltraDesk", "SmartChair", "SuperMonitor"]),
+            "{personal_detail}": self._rng.choice(["I have no family left.", "My business is bankrupt now.", "I can't face my employees."]),
+            "{phone}": f"+1-{self._rng.randint(200, 999)}-{self._rng.randint(100, 999)}-{self._rng.randint(1000, 9999)}",
+            "{error_code}": f"ERR-{self._rng.randint(1000, 9999)}",
+            "{location}": self._rng.choice(["Downtown", "Westside", "Northbranch", "Main St"]),
+            "{name}": self._rng.choice(["Alex", "Sam", "Jordan", "Taylor"]),
+            "{attribute}": self._rng.choice(["age", "appearance", "accent", "background"])
         }
         
         result = template

@@ -138,7 +138,7 @@ class SupportEnvironment(Environment):
             steps_remaining=max_steps,
             max_steps=max_steps,
             message=f"New support ticket received. Customer: {self._current_ticket['customer_name']}. Subject: {self._current_ticket['subject']}",
-            available_actions=["classify", "respond", "escalate", "request_info", "resolve"]
+            available_actions=["classify", "respond", "escalate", "request_info", "resolve", "lookup_kb"]
         )
     
     def step(
@@ -181,7 +181,8 @@ class SupportEnvironment(Environment):
             step_count=self._state.step_count,
             max_steps=self._state.max_steps,
             is_resolved=self._is_resolved,
-            task_difficulty=self._state.task_difficulty
+            task_difficulty=self._state.task_difficulty,
+            confidence=action.confidence
         )
         
         reward = reward_breakdown.total
@@ -205,6 +206,9 @@ class SupportEnvironment(Environment):
         
         # Calculate steps remaining
         steps_remaining = max(0, self._state.max_steps - self._state.step_count)
+        
+        # Sync sentiment to state
+        self._state.customer_sentiment = self._current_ticket["sentiment"]
         
         return SupportObservation(
             done=done,
@@ -250,6 +254,8 @@ class SupportEnvironment(Environment):
             return self._handle_request_info(content)
         elif action_type == "resolve":
             return self._handle_resolve(content)
+        elif action_type == "lookup_kb":
+            return self._handle_lookup_kb(content)
         else:
             return f"Unknown action type: {action_type}"
     
@@ -290,7 +296,14 @@ class SupportEnvironment(Environment):
         response_lower = response.lower()
         has_empathy = any(kw in response_lower for kw in ["understand", "sorry", "apologize", "help", "thank"])
         has_solution = any(kw in response_lower for kw in ["here's", "you can", "resolved", "fixed", "processed", "please try"])
+        has_refund = "refund" in response_lower
+        has_escalation_mention = "escalat" in response_lower
         
+        if has_refund:
+            sentiment += 0.4
+        if has_escalation_mention:
+            sentiment += 0.2
+            
         if has_empathy and has_solution:
             sentiment += 0.3
         elif has_empathy:
@@ -381,6 +394,26 @@ class SupportEnvironment(Environment):
         })
         
         return f"Ticket marked as resolved. Summary: {summary}"
+
+    def _handle_lookup_kb(self, query: str) -> str:
+        """Handle KB lookup action."""
+        query_lower = query.lower()
+        kb = {
+            "password": "To reset a password, send the user a reset link and advise them to use a strong 12-char password.",
+            "billing": "For billing issues, verify the user's account info and check the recent invoice status.",
+            "refund": "Refunds can be issued within 30 days of purchase. Escalation is required for amounts > $500 or after 30 days. Policy ID: REF-402.",
+            "error": "For 500/error codes, ask for a screenshot and device info. Check system status at status.example.com.",
+            "account": "To update account info, users must use the profile settings page. Some fields require 2FA verification.",
+            "technical": "Technical issues often require clear cache and reinstall. If persistent, escalate with device logs.",
+            "escalation": "Escalation to human agents is required for fraud, high-value refunds, and security breaches.",
+            "identity": "If identity theft is suspected, freeze the account immediately and ask for a police report number.",
+            "malfunction": "Medical device malfunctions are critical safety issues. Escalate immediately to engineering and legal departments.",
+            "privacy": "Data privacy requests (GDPR/CCPA) should be handled by the privacy team. Escalate with 'privacy-request' tag.",
+        }
+        for key, answer in kb.items():
+            if key in query_lower:
+                return f"KB Result for '{query}': {answer}"
+        return f"KB Result for '{query}': No specific article found. Try searching for 'password', 'billing', 'refund', or 'error'."
     
     def _check_done(self) -> bool:
         """Check if episode should end."""
@@ -400,7 +433,7 @@ class SupportEnvironment(Environment):
     
     def _get_available_actions(self) -> List[str]:
         """Get currently available actions."""
-        actions = ["respond", "request_info"]
+        actions = ["respond", "request_info", "lookup_kb"]
         
         if not self._is_classified:
             actions.insert(0, "classify")
