@@ -21,7 +21,7 @@ BASE_URL = os.environ.get("SUPPORT_ENV_URL", "http://localhost:8000")
 # Validation constants
 MAX_CONTENT_LENGTH = 5000
 MIN_CONTENT_LENGTH = 1
-VALID_ACTION_TYPES = ["classify", "respond", "escalate", "request_info", "resolve"]
+VALID_ACTION_TYPES = ["classify", "respond", "escalate", "request_info", "resolve", "lookup_kb"]
 VALID_DIFFICULTIES = ["easy", "medium", "hard"]
 VALID_CATEGORIES = ["billing", "technical", "account", "general", "urgent", "feature_request"]
 REQUEST_TIMEOUT = 30
@@ -351,8 +351,10 @@ Please reset the environment and run an episode first.
         response.raise_for_status()
         data = response.json()
 
+        score = data.get("score", 0.0)
+        passed = data.get("passed", False)
+        
         # Score visual data
-        score_percentage = score * 100
         score_color = "#10b981" if passed else "#ef4444"
         score_emoji = "🏆" if passed else "💪"
         
@@ -398,8 +400,6 @@ Please reset the environment and run an episode first.
             </div>
         </div>
         """
-        return result
-
         return result
 
     except requests.exceptions.Timeout:
