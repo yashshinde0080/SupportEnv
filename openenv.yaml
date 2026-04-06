@@ -1,108 +1,80 @@
-# OpenEnv Environment Manifest
-# SupportEnv - Customer Support RL Environment
-
-name: support_env
-version: "1.0.0"
+name: support-ticket-triage
+version: "0.1.0"
 description: |
-  A production-grade reinforcement learning environment that simulates 
-  customer support workflows. Agents learn to classify tickets, respond 
-  to customers, and make escalation decisions.
-
-# Environment metadata
-author: "Yash Shinde"
-license: "MIT"
-repository: "https://huggingface.co/spaces/yashshinde/SupportEnv"
-documentation: "https://github.com/yashshinde/SupportEnv/blob/main/README.md"
-
-# Tags for discoverability
+  A realistic support‑ticket triage environment where an LLM agent receives a ticket,
+  can query a knowledge‑base, propose a resolution, and optionally request escalation.
+  Designed for OpenEnv benchmarking.
+author: "SupportEnv Team <support@example.com>"
+license: MIT
 tags:
-  - customer-support
-  - nlp
-  - decision-making
+  - support
+  - triage
   - real-world
-  - multi-step
-
-# Environment configuration
-config:
-  # Supported task difficulties
-  difficulties:
-    - easy
-    - medium
-    - hard
-  
-  # Default settings
-  defaults:
-    max_steps: 10
-    seed: 42
-
-  # Difficulty-specific settings
-  difficulty_settings:
-    easy:
-      max_steps: 5
-    medium:
-      max_steps: 8
-    hard:
-      max_steps: 12  # Increased to make efficiency harder to achieve
-  
-  # Action space
-  action_space:
-    type: discrete
-    actions:
-      - classify
-      - respond
-      - escalate
-      - request_info
-      - lookup_kb
-      - resolve
-  
-  # Observation space
-  observation_space:
-    type: dict
+  - openenv
+environment:
+  python_package: supportenv.server
+  entrypoint: SupportEnvironment
+actions:
+  - name: classify
+    description: "Classify the ticket into a category."
+    parameters:
+      content:
+        type: string
+        description: "Category name."
+  - name: respond
+    description: "Send a reply to the customer."
+    parameters:
+      content:
+        type: string
+        description: "Reply text."
+      confidence:
+        type: float
+        description: "Optional confidence score (0.0‑1.0)."
+        minimum: 0.0
+        maximum: 1.0
+  - name: lookup_kb
+    description: "Search internal knowledge‑base for relevant articles."
+    parameters:
+      content:
+        type: string
+        description: "Search term."
+  - name: escalate
+    description: "Escalate the ticket to a senior agent."
+    parameters: {}
+  - name: request_info
+    description: "Request additional information from the customer."
+    parameters:
+      content:
+        type: string
+        description: "Information requested (e.g., order ID, email, screenshot)."
+  - name: resolve
+    description: "Mark the ticket as resolved with final resolution text."
+    parameters:
+      content:
+        type: string
+        description: "Resolution text."
+observations:
+  - name: ticket
+    description: "Current ticket details."
     fields:
-      ticket_text: string
-      ticket_subject: string
-      customer_sentiment: float
-      interaction_history: list
-      is_classified: bool
-      steps_remaining: int
-
-# Server configuration
-server:
-  port: 7860
-  host: "0.0.0.0"
-  workers: 1
-  concurrent_sessions: true
-
-# Grading configuration
-grading:
-  score_range: [0.0, 1.0]
-  deterministic: true
-  
-  # Weights by difficulty
-  weights:
-    easy:
-      classification: 0.30
-      response_quality: 0.40
-      escalation: 0.05
-      resolution: 0.15
-      efficiency: 0.10
-    medium:
-      classification: 0.20
-      response_quality: 0.35
-      escalation: 0.15
-      resolution: 0.20
-      efficiency: 0.10
-    hard:
-      classification: 0.15
-      response_quality: 0.25
-      escalation: 0.35
-      resolution: 0.15
-      efficiency: 0.10
-
-# Baseline configuration
-baseline:
-  type: rule-based
-  expected_scores:
-    easy: 0.95
-    medium: 0.88
-    hard: 0.92
+      id:
+        type: integer
+      subject:
+        type: string
+      body:
+        type: string
+      status:
+        type: string
+        enum: [open, pending, resolved, escalated]
+  - name: kb_results
+    description: "Results returned by a KB lookup."
+    fields:
+      articles:
+        type: array
+        items:
+          type: string
+reward:
+  description: |
+    Positive reward for each correct resolution step, small step‑penalty to discourage loops,
+    and a large penalty for invalid actions.
+  range: [0.0, 1.0]

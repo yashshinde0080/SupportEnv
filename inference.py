@@ -2,28 +2,24 @@ import os
 import re
 import json
 import textwrap
-import asyncio
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from openai import OpenAI
 from client import SupportEnv
 from models import SupportAction, SupportObservation
 
-# Environment variables from mandate
+# Environment variables as per OpenEnv spec
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "your-hf-token")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "")
-LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "support-env-local")
-TASK_NAME = os.getenv("SUPPORT_ENV_TASK", "customer-support")
-BENCHMARK = os.getenv("SUPPORT_ENV_BENCHMARK", "support_env")
 
 MAX_STEPS = 10
-TEMPERATURE = 0.2
+TEMPERATURE = 0.0
 MAX_TOKENS = 500
 SUCCESS_SCORE_THRESHOLD = 0.5
 
 # Fallback in case model fails or gives invalid action
-FALLBACK_ACTION = SupportAction(action_type="respond", content="I apologize, but I am unable to process your request at this time.", confidence=0.0)
+FALLBACK_ACTION = SupportAction(action_type="respond", content="I apologize, but I am unable to process your request at this time.")
 
 SYSTEM_PROMPT = textwrap.dedent(
     """
@@ -42,7 +38,8 @@ SYSTEM_PROMPT = textwrap.dedent(
     - classify: Categories are 'billing', 'technical', 'account', or 'general'.
     - respond: Send a message to the customer.
     - request_info: Ask the customer for more details (e.g. order ID).
-    - escalate: Escalate to a human agent if you cannot solve it.
+    - lookup_kb: Search internal knowledge‑base for relevant articles (e.g. 'password', 'refund').
+    - escalate: Escalate to a human agent if you cannot solve it or if a safety issue is suspect.
     - resolve: Close the ticket when the issue is fully addressed.
     
     Wait for the environment to respond after each action.
@@ -109,98 +106,78 @@ def parse_model_action(response_text: str) -> SupportAction:
 def main() -> None:
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     
+    # Environment URL (HuggingFace Space or Local)
     env_url = os.getenv("SUPPORT_ENV_URL", "http://localhost:7860")
     env = SupportEnv(base_url=env_url)
     
     history: List[str] = []
-    rewards: List[float] = []
-    steps_taken = 0
-    score = 0.0
-    success = False
     
-    difficulty = os.getenv("SUPPORT_ENV_DIFFICULTY", "medium")
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
-    
-    try:
-        with env.sync() as conn:
-            result = conn.reset(difficulty=difficulty, seed=42)
-            observation = result.observation
-            
-            for step in range(1, MAX_STEPS + 1):
-                if result.done:
-                    break
+    # Run a few episodes on different difficulties
+    for difficulty in ["easy", "medium", "hard"]:
+        print(f"\n--- Running {difficulty.upper()} Episode ---")
+        
+        try:
+            with env.sync() as conn:
+                result = conn.reset(difficulty=difficulty, seed=42)
+                observation = result.observation
                 
-                user_prompt = build_user_prompt(step, observation, history)
-                
-                messages = [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
-                ]
-                
-                error = None
-                action = FALLBACK_ACTION
-                try:
-                    completion = client.chat.completions.create(
-                        model=MODEL_NAME,
-                        messages=messages,
-                        temperature=TEMPERATURE,
-                        max_tokens=MAX_TOKENS,
-                    )
-                    response_text = completion.choices[0].message.content or ""
-                    action = parse_model_action(response_text)
-                except Exception as e:
-                    error = str(e)
-                
-                action_str = f"{action.action_type}(\"{action.content}\")"
-                
-                try:
+                for step in range(1, MAX_STEPS + 1):
+                    if result.done:
+                        break
+                    
+                    user_prompt = build_user_prompt(step, observation, history)
+                    
+                    messages = [
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_prompt}
+                    ]
+                    
+                    try:
+                        completion = client.chat.completions.create(
+                            model=MODEL_NAME,
+                            messages=messages,
+                            temperature=TEMPERATURE,
+                            max_tokens=MAX_TOKENS,
+                        )
+                        response_text = completion.choices[0].message.content or ""
+                    except Exception as e:
+                        print(f"Model request failed: {e}")
+                        action = FALLBACK_ACTION
+                    else:
+                        action = parse_model_action(response_text)
+                    
+                    print(f"Step {step}: {action.action_type} -> {action.content[:50]}...")
+                    
                     result = conn.step(action)
                     observation = result.observation
-                    reward = result.reward or 0.0
-                    done = result.done
-                except Exception as e:
-                    error = str(e)
-                    reward = 0.0
-                    done = True
+                    
+                    history.append(f"Step {step}: {action.action_type}({action.content}) -> Reward: {result.reward:.2f}")
+                    
+                    if result.done:
+                        print("Episode complete.")
+                        break
                 
-                rewards.append(reward)
-                steps_taken = step
-                
-                log_step(step=step, action=action_str, reward=reward, done=done, error=error)
-                history.append(f"Step {step}: {action_str} -> Reward: {reward:.2f}")
-                
-                if done:
-                    break
-            
-            # Fetch final grade from /grader
-            import requests
-            try:
-                grader_url = f"{env_url}/grader"
-                session_id = getattr(conn, 'session_id', getattr(result, 'session_id', None))
-                if session_id:
+                # Final official grade
+                import requests
+                try:
+                    grader_url = f"{env_url}/grader"
+                    session_id = getattr(conn, 'session_id', getattr(result, 'session_id', None))
                     grade_resp = requests.post(grader_url, json={"session_id": session_id})
                     if grade_resp.status_code == 200:
                         grade_data = grade_resp.json()
-                        score = grade_data.get('score', 0.0)
-                        success = grade_data.get('passed', False)
+                        print(f"\nFinal Official Grade")
+                        print(f"Score: {grade_data.get('score', 0.0):.4f}")
+                        print(f"Passed: {grade_data.get('passed', False)}")
+                        print(f"Feedback: {grade_data.get('feedback', '')}")
                     else:
-                        score = sum(rewards) / MAX_STEPS
-                        score = max(0.0, min(1.0, score))
-                        success = score >= SUCCESS_SCORE_THRESHOLD
-                else:
-                    score = sum(rewards) / MAX_STEPS
-                    score = max(0.0, min(1.0, score))
-                    success = score >= SUCCESS_SCORE_THRESHOLD
-            except Exception:
-                score = sum(rewards) / MAX_STEPS
-                score = max(0.0, min(1.0, score))
-                success = score >= SUCCESS_SCORE_THRESHOLD
+                        print(f"Grader endpoint failed: {grade_resp.status_code}")
+                except Exception as e:
+                    print(f"Failed to fetch grade: {e}")
                 
-    except Exception as e:
-        # Catch unexpected errors during setup
-        pass
-    finally:
-        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+                print("\nTask Finished.")
+                    
+        except Exception as e:
+            print(f"Episode failed: {e}")
 
 if __name__ == "__main__":
     main()

@@ -111,11 +111,11 @@ python baseline/run_baseline.py --verbose
 ### Option C — Docker
 
 ```bash
-docker build -t support-env:latest -f server/Dockerfile .
-docker run -p 7860:7860 support-env:latest
+docker build -t support-env:latest -f Dockerfile .
+docker run -p 8000:8000 support-env:latest
 
 # Confirm
-curl http://localhost:7860/health
+curl http://localhost:8000/health
 ```
 
 ---

@@ -150,12 +150,15 @@ async def list_tasks():
     return {"tasks": tasks}
 
 
+@app.post("/reset")
 @app.post("/api/reset")
-async def reset_environment(request: ResetRequest):
+async def reset_environment(request: ResetRequest = None):
     """
     Reset environment for new episode.
-    HTTP alternative to WebSocket reset.
+    -d '{}' works as ResetRequest is optional.
     """
+    if request is None:
+        request = ResetRequest()
     try:
         # Create or get environment
         session_id = request.session_id or str(uuid.uuid4())
@@ -186,6 +189,7 @@ async def reset_environment(request: ResetRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/step")
 @app.post("/api/step")
 async def step_environment(request: StepRequest):
     """
@@ -224,6 +228,7 @@ async def step_environment(request: StepRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/state/{session_id}")
 @app.get("/api/state/{session_id}")
 async def get_state(session_id: str):
     """Get current state of environment."""
@@ -389,7 +394,7 @@ except Exception as e:
 def main():
     import uvicorn
     # uvicorn.run works better with a string import for hot reload, or just the app var
-    uvicorn.run("server.app:app", host="0.0.0.0", port=7860)
+    uvicorn.run("server.app:app", host="0.0.0.0", port=8000)
 
 if __name__ == "__main__":
     main()
