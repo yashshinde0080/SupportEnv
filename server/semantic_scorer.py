@@ -4,6 +4,11 @@ Evaluates agent responses for empathy, solution-orientation, and resolution alig
 """
 
 from typing import List, Dict, Any, Optional
+import os
+import sys
+
+# Add parent directory to path for interface import
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class SemanticScorer:
     def __init__(self):
@@ -15,8 +20,22 @@ class SemanticScorer:
             try:
                 from sentence_transformers import SentenceTransformer
                 # Using a small, fast model suitable for CPU inference in HF Spaces
-                self._model = SentenceTransformer('all-MiniLM-L6-v2')
+                # Load model from sentence-transformers/all-MiniLM-L6-v2 using HF_TOKEN from interface.py
+                from interface import Config
+                hf_token = Config.get_hf_token()
+
+                if hf_token:
+                    self._model = SentenceTransformer(
+                        'sentence-transformers/all-MiniLM-L6-v2',
+                        token=hf_token
+                    )
+                else:
+                    # Fallback to loading without token (may fail for gated models)
+                    self._model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
             except ImportError:
+                return None
+            except Exception:
+                # Handle any other errors (e.g., network issues, invalid token)
                 return None
         return self._model
 

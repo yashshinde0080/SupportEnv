@@ -1,3 +1,21 @@
+#!/usr/bin/env python3
+"""
+SupportEnv Inference Script - OpenEnv Competition Submission
+
+This script runs the baseline agent on all required tasks (easy, medium, hard).
+It uses the OpenAI client with environment variables for configuration.
+
+REQUIRED ENVIRONMENT VARIABLES:
+    API_BASE_URL: The API endpoint for the LLM
+    MODEL_NAME: The model identifier to use for inference
+    HF_TOKEN: Your Hugging Face / API key
+
+OUTPUT FORMAT (STRICT):
+    [START] task=<task_id> env=<env_url> model=<model_name>
+    [STEP] step=<n> action=<action_type> reward=<r> done=<bool> error=<error_or_null>
+    [END] success=<bool> steps=<n> score=<s> rewards=[r1,r2,...]
+"""
+
 import os
 import re
 import json
@@ -16,79 +34,97 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
 MAX_STEPS = 10
 TEMPERATURE = 0.0
 MAX_TOKENS = 500
-SUCCESS_SCORE_THRESHOLD = 0.5
 
-# Fallback in case model fails or gives invalid action
-FALLBACK_ACTION = SupportAction(action_type="respond", content="I apologize, but I am unable to process your request at this time.")
+# Fallback action for error cases
+FALLBACK_ACTION = SupportAction(
+    action_type="respond",
+    content="I apologize, but I am unable to process your request at this time."
+)
 
+# System prompt for the LLM agent
 SYSTEM_PROMPT = textwrap.dedent(
     """
     You are an AI customer support agent controlling a support environment.
     Your goal is to resolve customer tickets efficiently and accurately.
     Reply with exactly one action in JSON format.
-    
+
     The action MUST follow this schema:
     {
-        "action_type": "classify" | "respond" | "escalate" | "request_info" | "resolve",
-        "content": "the content for the action (category for classify, message for respond, reason for others)",
+        "action_type": "classify" | "respond" | "escalate" | "request_info" | "resolve" | "lookup_kb",
+        "content": "the content for the action",
         "confidence": float (between 0.0 and 1.0)
     }
-    
+
     Action Types:
     - classify: Categories are 'billing', 'technical', 'account', or 'general'.
     - respond: Send a message to the customer.
-    - request_info: Ask the customer for more details (e.g. order ID).
-    - lookup_kb: Search internal knowledge‑base for relevant articles (e.g. 'password', 'refund').
-    - escalate: Escalate to a human agent if you cannot solve it or if a safety issue is suspect.
+    - request_info: Ask the customer for more details.
+    - lookup_kb: Search internal knowledge-base for relevant articles.
+    - escalate: Escalate to a human agent.
     - resolve: Close the ticket when the issue is fully addressed.
-    
+
     Wait for the environment to respond after each action.
     Do not include explanations or any other text.
     """
 ).strip()
 
+# =============================================================================
+# LOGGING FUNCTIONS (STRICT FORMAT - REQUIRED BY COMPETITION)
+# =============================================================================
 def log_start(task: str, env: str, model: str) -> None:
+    """Log start of task execution - REQUIRED FORMAT: [START] ..."""
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
-def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str] = None) -> None:
+    """Log step execution - REQUIRED FORMAT: [STEP] ..."""
     error_val = error if error else "null"
     done_val = str(done).lower()
-    print(
-        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
-        flush=True,
-    )
+    print(f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}", flush=True)
+
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    """Log end of task execution - REQUIRED FORMAT: [END] ..."""
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}", flush=True)
+    print(f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards=[{rewards_str}]", flush=True)
 
+
+# =============================================================================
+# PROMPT BUILDING
+# =============================================================================
 def build_user_prompt(step: int, obs: SupportObservation, history: List[str]) -> str:
+    """Build the user prompt for the LLM."""
     history_str = "\n".join(history[-5:]) if history else "None"
-    
+
     prompt = textwrap.dedent(
         f"""
         Step: {step}
         Ticket Subject: {obs.ticket_subject}
         Customer: {obs.customer_name}
         Customer Sentiment: {obs.customer_sentiment:.2f}
-        
+
         Ticket Text:
         {obs.ticket_text}
-        
+
         Current Status:
         - Classified: {obs.is_classified}
         - Category: {obs.current_classification or 'Not classified yet'}
         - Steps Remaining: {obs.steps_remaining}
-        
+
         Interaction History:
         {history_str}
-        
+
         Reply with exactly one action JSON.
         """
     ).strip()
     return prompt
 
+
+# =============================================================================
+# ACTION PARSING
+# =============================================================================
 def parse_model_action(response_text: str) -> SupportAction:
+    """Parse LLM response into a SupportAction."""
     try:
         match = re.search(r'\{.*\}', response_text, re.DOTALL)
         if match:

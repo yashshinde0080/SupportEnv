@@ -1,0 +1,14 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.db
+.ipynb_checkpoints
+.pytest_cache
+.vscode
+.idea
+*.log
+frontend/gradio_cached_examples

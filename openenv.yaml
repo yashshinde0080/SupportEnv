@@ -1,4 +1,4 @@
-name: support-ticket-triage
+name: SupportEnv
 version: "0.1.0"
 description: |
   A realistic support‑ticket triage environment where an LLM agent receives a ticket,
@@ -12,7 +12,7 @@ tags:
   - real-world
   - openenv
 environment:
-  python_package: supportenv.server
+  python_package: server.environment
   entrypoint: SupportEnvironment
 actions:
   - name: classify
@@ -20,7 +20,7 @@ actions:
     parameters:
       content:
         type: string
-        description: "Category name."
+        description: "Category name ('billing', 'technical', 'account', 'general')."
   - name: respond
     description: "Send a reply to the customer."
     parameters:
@@ -37,42 +37,69 @@ actions:
     parameters:
       content:
         type: string
-        description: "Search term."
+        description: "Search term (e.g. 'password', 'refund')."
   - name: escalate
-    description: "Escalate the ticket to a senior agent."
-    parameters: {}
+    description: "Escalate the ticket to a human agent."
+    parameters:
+      content:
+        type: string
+        description: "Reason for escalation."
   - name: request_info
     description: "Request additional information from the customer."
     parameters:
       content:
         type: string
-        description: "Information requested (e.g., order ID, email, screenshot)."
+        description: "Information requested (e.g. order ID)."
   - name: resolve
     description: "Mark the ticket as resolved with final resolution text."
     parameters:
       content:
         type: string
-        description: "Resolution text."
+        description: "Resolution summary."
 observations:
-  - name: ticket
-    description: "Current ticket details."
-    fields:
-      id:
-        type: integer
-      subject:
-        type: string
-      body:
-        type: string
-      status:
-        type: string
-        enum: [open, pending, resolved, escalated]
-  - name: kb_results
-    description: "Results returned by a KB lookup."
-    fields:
-      articles:
-        type: array
-        items:
-          type: string
+  - name: ticket_id
+    description: "Unique identifier for the ticket."
+    type: string
+  - name: ticket_subject
+    description: "Subject line of the ticket."
+    type: string
+  - name: ticket_text
+    description: "Body text of the ticket."
+    type: string
+  - name: customer_name
+    description: "Name of the customer."
+    type: string
+  - name: customer_sentiment
+    description: "Current sentiment score (-1.0 to 1.0)."
+    type: float
+  - name: interaction_history
+    description: "List of previous messages in the conversation."
+    type: array
+    items:
+      type: object
+  - name: current_classification
+    description: "Current assigned category if any."
+    type: string
+  - name: is_classified
+    description: "Whether the ticket has been classified."
+    type: boolean
+  - name: is_escalated
+    description: "Whether the ticket has been escalated."
+    type: boolean
+  - name: steps_remaining
+    description: "Remaining steps allowed in the episode."
+    type: integer
+  - name: max_steps
+    description: "Total steps allowed for the task."
+    type: integer
+  - name: message
+    description: "Feedback or system message from the environment."
+    type: string
+  - name: available_actions
+    description: "List of actions currently allowed."
+    type: array
+    items:
+      type: string
 reward:
   description: |
     Positive reward for each correct resolution step, small step‑penalty to discourage loops,
