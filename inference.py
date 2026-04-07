@@ -9,9 +9,9 @@ from client import SupportEnv
 from models import SupportAction, SupportObservation
 
 # Environment variables as per OpenEnv spec
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api-inference.huggingface.co/v1/")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "your-hf-token")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o")
 
 MAX_STEPS = 10
 TEMPERATURE = 0.0
@@ -104,28 +104,35 @@ def parse_model_action(response_text: str) -> SupportAction:
         return FALLBACK_ACTION
 
 def main() -> None:
+    # Use OpenAI client as mandated
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     
     # Environment URL (HuggingFace Space or Local)
     env_url = os.getenv("SUPPORT_ENV_URL", "http://localhost:7860")
     env = SupportEnv(base_url=env_url)
     
-    history: List[str] = []
-    
-    # Run a few episodes on different difficulties
+    # Run episodes on all 3 difficulties as mandated
     for difficulty in ["easy", "medium", "hard"]:
-        print(f"\n--- Running {difficulty.upper()} Episode ---")
+        task_name = f"support_triage_{difficulty}"
+        log_start(task=task_name, env="SupportEnv", model=MODEL_NAME)
+        
+        history: List[str] = []
+        rewards: List[float] = []
+        steps_taken = 0
+        success = False
+        final_score = 0.0
         
         try:
             with env.sync() as conn:
                 result = conn.reset(difficulty=difficulty, seed=42)
                 observation = result.observation
                 
-                for step in range(1, MAX_STEPS + 1):
+                for step_idx in range(1, MAX_STEPS + 1):
+                    steps_taken = step_idx
                     if result.done:
                         break
                     
-                    user_prompt = build_user_prompt(step, observation, history)
+                    user_prompt = build_user_prompt(step_idx, observation, history)
                     
                     messages = [
                         {"role": "system", "content": SYSTEM_PROMPT},
@@ -140,44 +147,44 @@ def main() -> None:
                             max_tokens=MAX_TOKENS,
                         )
                         response_text = completion.choices[0].message.content or ""
-                    except Exception as e:
-                        print(f"Model request failed: {e}")
-                        action = FALLBACK_ACTION
-                    else:
                         action = parse_model_action(response_text)
-                    
-                    print(f"Step {step}: {action.action_type} -> {action.content[:50]}...")
+                    except Exception as e:
+                        action = FALLBACK_ACTION
                     
                     result = conn.step(action)
                     observation = result.observation
                     
-                    history.append(f"Step {step}: {action.action_type}({action.content}) -> Reward: {result.reward:.2f}")
+                    rewards.append(float(result.reward or 0.0))
+                    history.append(f"Step {step_idx}: {action.action_type}({action.content[:30]})")
+                    
+                    log_step(
+                        step=step_idx, 
+                        action=action.action_type, 
+                        reward=float(result.reward or 0.0), 
+                        done=bool(result.done), 
+                        error=None
+                    )
                     
                     if result.done:
-                        print("Episode complete.")
                         break
                 
-                # Final official grade
+                # Fetch final grade from environment
                 import requests
                 try:
                     grader_url = f"{env_url}/grader"
                     session_id = getattr(conn, 'session_id', getattr(result, 'session_id', None))
-                    grade_resp = requests.post(grader_url, json={"session_id": session_id})
+                    grade_resp = requests.post(grader_url, json={"session_id": session_id}, timeout=30)
                     if grade_resp.status_code == 200:
                         grade_data = grade_resp.json()
-                        print(f"\nFinal Official Grade")
-                        print(f"Score: {grade_data.get('score', 0.0):.4f}")
-                        print(f"Passed: {grade_data.get('passed', False)}")
-                        print(f"Feedback: {grade_data.get('feedback', '')}")
-                    else:
-                        print(f"Grader endpoint failed: {grade_resp.status_code}")
-                except Exception as e:
-                    print(f"Failed to fetch grade: {e}")
+                        final_score = float(grade_data.get('score', 0.0))
+                        success = bool(grade_data.get('passed', False))
+                except Exception:
+                    pass
                 
-                print("\nTask Finished.")
+                log_end(success=success, steps=steps_taken, score=final_score, rewards=rewards)
                     
         except Exception as e:
-            print(f"Episode failed: {e}")
+            log_end(success=False, steps=steps_taken, score=0.0, rewards=rewards)
 
 if __name__ == "__main__":
     main()
