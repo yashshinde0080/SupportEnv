@@ -18,7 +18,7 @@ from typing import Dict, Any, Tuple, List, Optional
 import os
 
 # Get base URL (local or deployed)
-BASE_URL = os.environ.get("SUPPORT_ENV_URL", "http://localhost:8000")
+BASE_URL = os.environ.get("SUPPORT_ENV_URL", "http://localhost:8001")
 
 # Validation constants
 MAX_CONTENT_LENGTH = 5000

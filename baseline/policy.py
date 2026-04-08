@@ -77,7 +77,7 @@ class BaselinePolicy:
             Action to take
         """
         ticket_text = f"{observation.ticket_subject} {observation.ticket_text}".lower()
-        diff = observation.difficulty_level.lower() if observation.difficulty_level else "easy"
+        diff = observation.task_difficulty.lower() if observation.task_difficulty else "easy"
         
         # Step 1: Classify if not done
         if not observation.is_classified and not self.classified:

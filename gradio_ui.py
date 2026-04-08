@@ -19,7 +19,7 @@ from datetime import datetime
 import pandas as pd
 
 # Server configuration
-DEFAULT_SERVER_URL = "http://localhost:8000"
+DEFAULT_SERVER_URL = "http://localhost:8001"
 
 # Global state
 episode_history = []
@@ -63,31 +63,27 @@ def format_observation(obs: Dict) -> str:
         return "No observation"
 
     lines = [
-        f"**Ticket ID:** {obs.get('ticket_id', 'N/A')}",
-        f"**Customer:** {obs.get('customer_name', 'N/A')}",
-        f"**Subject:** {obs.get('ticket_subject', 'N/A')}",
-        f"**Difficulty:** {obs.get('task_difficulty', 'N/A')}",
-        f"**Steps Remaining:** {obs.get('steps_remaining', 0)}",
-        f"**Customer Sentiment:** {obs.get('customer_sentiment', 0):.2f}",
-        f"**Classification:** {obs.get('current_classification', 'Not classified')}",
-        f"**Done:** {obs.get('done', False)}",
-        f"**Reward:** {obs.get('reward', 'N/A')}",
+        f"### 🎫 Ticket Details",
+        f"- **Ticket ID:** `{obs.get('ticket_id', 'N/A')}`",
+        f"- **Customer:** {obs.get('customer_name', 'N/A')}",
+        f"- **Subject:** {obs.get('ticket_subject', 'N/A')}",
+        f"- **Difficulty:** {obs.get('task_difficulty', 'N/A').title()}",
         "",
-        "**Ticket Content:**",
-        f"```",
-        obs.get('ticket_text', 'N/A'),
+        f"### 📊 Environment Status",
+        f"- **Steps Remaining:** {obs.get('steps_remaining', 0)}",
+        f"- **Customer Sentiment:** {obs.get('customer_sentiment', 0):.2f}",
+        f"- **Classification:** {obs.get('current_classification', 'Not classified')}",
+        f"- **Done:** {'✅ Yes' if obs.get('done', False) else '⏳ No'}",
+        f"- **Last Reward:** {obs.get('reward', 'N/A')}",
+        "",
+        "### 📝 Ticket Content",
+        f"```text",
+        f"{obs.get('ticket_text', 'N/A')}",
         f"```",
     ]
 
     if obs.get('message'):
-        lines.extend(["", f"**Message:** {obs['message']}"])
-
-    if obs.get('interaction_history'):
-        lines.extend(["", "**Interaction History:**"])
-        for interaction in obs['interaction_history'][-5:]:
-            role = interaction.get('role', 'unknown').capitalize()
-            content = interaction.get('content', '')[:100]
-            lines.append(f"- **{role}:** {content}...")
+        lines.extend(["", f"### 💡 Feedback", f"{obs['message']}"])
 
     return "\n".join(lines)
 
@@ -144,7 +140,7 @@ def env_reset(difficulty: str, seed: int = None) -> tuple:
     if seed:
         json_data["seed"] = seed
 
-    result = call_api("/reset", method="POST", json_data=json_data)
+    result = call_api("/api/reset", method="POST", json_data=json_data)
 
     if 'error' in result:
         return (
@@ -201,7 +197,7 @@ def env_step(action_type: str, content: str, confidence: float = 1.0) -> tuple:
         "confidence": confidence
     }
 
-    result = call_api("/step", method="POST", json_data=json_data)
+    result = call_api("/api/step", method="POST", json_data=json_data)
 
     if 'error' in result:
         return (
@@ -885,7 +881,7 @@ def launch_standalone():
     """Launch Gradio UI as standalone server."""
     demo, theme, css = create_gradio_interface()
     demo.launch(
-        server_name="0.0.0.0",
+        server_name="127.0.0.1",
         server_port=7861,
         share=False,
         show_error=True,
