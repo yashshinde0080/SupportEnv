@@ -377,13 +377,13 @@ async def curriculum_endpoint(request: CurriculumRequest):
 
 
 
-# Import Gradio UI
+# Import and mount Gradio UI
 try:
-    from frontend.gradio_ui import create_gradio_interface
+    from gradio_ui import create_gradio_interface
     import gradio as gr
-    
+
+    # Create Gradio app and mount it
     demo, theme, css = create_gradio_interface()
-    # Apply theme/css explicitly if needed, but mount_gradio_app usually handles the demo object
     app = gr.mount_gradio_app(app, demo, path="/web")
 except ImportError:
     pass  # Gradio not installed

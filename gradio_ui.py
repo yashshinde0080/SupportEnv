@@ -41,9 +41,9 @@ def call_api(endpoint: str, method: str = "GET", json_data: Optional[Dict] = Non
     url = f"{get_server_url()}{endpoint}"
     try:
         if method == "GET":
-            response = requests.get(url, timeout=30)
+            response = requests.get(url, timeout=300)
         elif method == "POST":
-            response = requests.post(url, json=json_data or {}, timeout=30)
+            response = requests.post(url, json=json_data or {}, timeout=300)
         else:
             raise ValueError(f"Unsupported method: {method}")
 
@@ -185,6 +185,11 @@ def env_step(action_type: str, content: str, confidence: float = 1.0) -> tuple:
         return (
             "**Error:** No active session. Please reset first.",
             "",
+            "",
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
             gr.update(),
             gr.update(),
         )
@@ -202,6 +207,11 @@ def env_step(action_type: str, content: str, confidence: float = 1.0) -> tuple:
         return (
             f"**Error:** {result['error']}",
             "",
+            "",
+            gr.update(),
+            gr.update(),
+            gr.update(),
+            gr.update(),
             gr.update(),
             gr.update(),
         )
@@ -215,7 +225,8 @@ def env_step(action_type: str, content: str, confidence: float = 1.0) -> tuple:
 
     # If done, automatically fetch grade
     grade_text = ""
-    if result.get('done', False):
+    is_done = result.get('done', False)
+    if is_done:
         time.sleep(0.1)  # Small delay to ensure server processed
         grade_result = call_api("/grader", method="POST", json_data={"session_id": current_session})
         grade_text = format_grade(grade_result)
@@ -229,7 +240,20 @@ def env_step(action_type: str, content: str, confidence: float = 1.0) -> tuple:
             "total_reward": current_observation.get('ticket_text', '')[:50],
         })
 
-    return obs_text, state_text, grade_text, gr.update()
+    # Disable buttons if episode is done
+    btn_state = gr.update(interactive=False) if is_done else gr.update(interactive=True)
+
+    return (
+        obs_text,
+        state_text,
+        grade_text,
+        btn_state,  # classify_btn
+        btn_state,  # respond_btn
+        btn_state,  # request_info_btn
+        btn_state,  # lookup_kb_btn
+        btn_state,  # escalate_btn
+        btn_state,  # resolve_btn
+    )
 
 
 def env_classify(category: str, confidence: float) -> tuple:
@@ -426,11 +450,12 @@ def view_history() -> tuple:
     passed = sum(1 for ep in episode_history if ep.get('passed', False))
     avg_score = sum(ep.get('score', 0) for ep in episode_history) / total if total > 0 else 0
 
+    pass_rate = (passed / total * 100) if total > 0 else 0
     summary = [
         "# Episode History",
         "",
         f"**Total Episodes:** {total}",
-        f"**Passed:** {passed} ({passed/total:.2%} if total > 0 else 0)",
+        f"**Passed:** {passed} ({pass_rate:.1f}%)",
         f"**Average Score:** {avg_score:.4f}",
         "",
     ]
@@ -622,7 +647,7 @@ def create_gradio_interface():
                                 label="Category",
                                 value="billing",
                             )
-                            classify_btn = gr.Button("Classify", variant="secondary")
+                            classify_btn = gr.Button("Classify", variant="secondary", interactive=False)
 
                         with gr.Accordion("Response", open=True):
                             response_textbox = gr.Textbox(
@@ -630,7 +655,7 @@ def create_gradio_interface():
                                 placeholder="Enter your response to the customer...",
                                 lines=3,
                             )
-                            respond_btn = gr.Button("Send Response", variant="secondary")
+                            respond_btn = gr.Button("Send Response", variant="secondary", interactive=False)
 
                         with gr.Accordion("Information Gathering", open=False):
                             info_textbox = gr.Textbox(
@@ -638,14 +663,14 @@ def create_gradio_interface():
                                 placeholder="e.g., Order ID, email address, phone number...",
                                 lines=2,
                             )
-                            request_info_btn = gr.Button("Request Info", variant="secondary")
+                            request_info_btn = gr.Button("Request Info", variant="secondary", interactive=False)
 
                             kb_query_textbox = gr.Textbox(
                                 label="KB Search Query",
                                 placeholder="e.g., password, refund, billing...",
                                 lines=2,
                             )
-                            lookup_kb_btn = gr.Button("Lookup in KB", variant="secondary")
+                            lookup_kb_btn = gr.Button("Lookup in KB", variant="secondary", interactive=False)
 
                         with gr.Accordion("Escalation & Resolution", open=False):
                             escalate_reason_textbox = gr.Textbox(
@@ -653,14 +678,14 @@ def create_gradio_interface():
                                 placeholder="Explain why this needs human assistance...",
                                 lines=3,
                             )
-                            escalate_btn = gr.Button("Escalate to Human", variant="stop")
+                            escalate_btn = gr.Button("Escalate to Human", variant="stop", interactive=False)
 
                             resolve_summary_textbox = gr.Textbox(
                                 label="Resolution Summary",
                                 placeholder="Summarize how the issue was resolved...",
                                 lines=3,
                             )
-                            resolve_btn = gr.Button("Resolve Ticket", variant="stop")
+                            resolve_btn = gr.Button("Resolve Ticket", variant="stop", interactive=False)
 
                         grade_btn = gr.Button("Grade Episode", variant="secondary")
 
@@ -702,37 +727,37 @@ def create_gradio_interface():
                 classify_btn.click(
                     fn=env_classify,
                     inputs=[category_dropdown, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
                 )
 
                 respond_btn.click(
                     fn=env_respond,
                     inputs=[response_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
                 )
 
                 request_info_btn.click(
                     fn=env_request_info,
                     inputs=[info_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
                 )
 
                 lookup_kb_btn.click(
                     fn=env_lookup_kb,
                     inputs=[kb_query_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
                 )
 
                 escalate_btn.click(
                     fn=env_escalate,
                     inputs=[escalate_reason_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
                 )
 
                 resolve_btn.click(
                     fn=env_resolve,
                     inputs=[resolve_summary_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
                 )
 
                 grade_btn.click(
@@ -868,11 +893,13 @@ def create_gradio_interface():
     return demo, theme, custom_css
 
 
-# Create the demo for mounting
-demo, theme, css = create_gradio_interface()
+# Factory function for creating the demo
+# Call create_gradio_interface() to get demo, theme, css
 
 
-if __name__ == "__main__":
+def launch_standalone():
+    """Launch Gradio UI as standalone server."""
+    demo, theme, css = create_gradio_interface()
     demo.launch(
         server_name="0.0.0.0",
         server_port=7861,
@@ -881,3 +908,7 @@ if __name__ == "__main__":
         theme=theme,
         css=css,
     )
+
+
+if __name__ == "__main__":
+    launch_standalone()
