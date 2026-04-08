@@ -1,9 +1,0 @@
-
---- Running EASY Episode ---
-Episode failed: Failed to connect to ws://localhost:7860/ws: [WinError 1225] The remote computer refused the network connection
-
---- Running MEDIUM Episode ---
-Episode failed: Failed to connect to ws://localhost:7860/ws: [WinError 1225] The remote computer refused the network connection
-
---- Running HARD Episode ---
-Episode failed: Failed to connect to ws://localhost:7860/ws: [WinError 1225] The remote computer refused the network connection
