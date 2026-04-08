@@ -224,9 +224,7 @@ def env_step(action_type: str, content: str, confidence: float = 1.0) -> tuple:
     state_text = format_state(state_result) if 'error' not in state_result else ""
 
     # If done, automatically fetch grade
-    grade_text = ""
-    is_done = result.get('done', False)
-    if is_done:
+    if result.get('done', False):
         time.sleep(0.1)  # Small delay to ensure server processed
         grade_result = call_api("/grader", method="POST", json_data={"session_id": current_session})
         grade_text = format_grade(grade_result)
@@ -239,21 +237,10 @@ def env_step(action_type: str, content: str, confidence: float = 1.0) -> tuple:
             "passed": grade_result.get('passed', False),
             "total_reward": current_observation.get('ticket_text', '')[:50],
         })
+    else:
+        grade_text = gr.update()
 
-    # Disable buttons if episode is done
-    btn_state = gr.update(interactive=False) if is_done else gr.update(interactive=True)
-
-    return (
-        obs_text,
-        state_text,
-        grade_text,
-        btn_state,  # classify_btn
-        btn_state,  # respond_btn
-        btn_state,  # request_info_btn
-        btn_state,  # lookup_kb_btn
-        btn_state,  # escalate_btn
-        btn_state,  # resolve_btn
-    )
+    return obs_text, state_text, grade_text
 
 
 def env_classify(category: str, confidence: float) -> tuple:
@@ -522,123 +509,120 @@ def view_config() -> str:
 def create_gradio_interface():
     """Create the full Gradio interface."""
 
-    # Custom CSS
+    # Premium Dark Theme CSS
     custom_css = """
-    /* Global text color override */
-    body, .gradio-container, .prose, .prose * {
-        color: #ffffff !important;
-    }
-    
     .gradio-container {
-        max-width: 1400px !important;
-        background-color: #0b0f19 !important; /* Deep dark background */
+        background: radial-gradient(circle at 50% 0%, #1a1c2c 0%, #0d0e14 100%) !important;
+        color: #e2e8f0 !important;
     }
     
-    .observation-box {
-        border: 1px solid rgba(74, 144, 217, 0.5);
-        border-radius: 12px;
-        padding: 20px;
-        margin: 12px 0;
-        background: linear-gradient(135deg, #1e3a5f 0%, #0d1b2a 100%) !important;
-        color: #ffffff !important;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    /* Content Boxes - Glassmorphism Aesthetics */
+    .observation-box, .state-box, .grade-box, .baseline-box {
+        background: rgba(30, 41, 59, 0.7) !important;
+        backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 16px !important;
+        padding: 24px !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+        margin: 12px 0 !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
-    
-    .observation-box p, .observation-box strong, .observation-box span, .observation-box code {
-        color: #ffffff !important;
+
+    .observation-box:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 48px rgba(99, 102, 241, 0.2) !important;
     }
-    
-    .state-box {
-        border: 1px solid rgba(92, 184, 92, 0.5);
-        border-radius: 12px;
-        padding: 20px;
-        margin: 12px 0;
-        background: linear-gradient(135deg, #1d3a1d 0%, #0d1a0d 100%) !important;
-        color: #ffffff !important;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+
+    /* Visual Accents */
+    .observation-box { border-left: 6px solid #6366f1 !important; }
+    .state-box { border-left: 6px solid #10b981 !important; }
+    .grade-box { border-left: 6px solid #f59e0b !important; }
+
+    /* Text & Typography Visibility */
+    .gradio-container * {
+        color: #f1f5f9 !important;
     }
-    
-    .state-box p, .state-box strong, .state-box span {
-        color: #ffffff !important;
-    }
-    
-    .grade-box {
-        border: 1px solid rgba(240, 173, 78, 0.5);
-        border-radius: 12px;
-        padding: 20px;
-        margin: 12px 0;
-        background: linear-gradient(135deg, #4d3319 0%, #1a1108 100%) !important;
-        color: #ffffff !important;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-    }
-    
-    .grade-box p, .grade-box strong, .grade-box span {
-        color: #ffffff !important;
-    }
-    
-    /* Ensure all markdown headers are white */
+
     .gradio-container h1, .gradio-container h2, .gradio-container h3 {
         color: #ffffff !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.5px !important;
     }
-    
-    /* Fix for button text which sometimes gets lost */
-    button.primary, button.secondary {
-        color: white !important;
+
+    .observation-box strong, .state-box strong, .grade-box strong {
+        color: #a5b4fc !important;
+    }
+
+    /* Code block readability */
+    .observation-box code, .observation-box pre {
+        background: rgba(15, 23, 42, 0.9) !important;
+        color: #38bdf8 !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+    }
+
+    /* Table styling */
+    .gradio-container table {
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    }
+
+    .gradio-container th {
+        background: rgba(71, 85, 105, 0.6) !important;
+        color: #ffffff !important;
     }
     """
 
-    # Theme
+    # Modern Theme
     theme = gr.themes.Soft(
-        primary_hue="blue",
-        secondary_hue="green",
+        primary_hue="indigo",
+        secondary_hue="slate",
+        neutral_hue="slate",
+    ).set(
+        body_background_fill="*neutral_950",
+        block_background_fill="*neutral_900",
+        block_border_width="0px",
     )
 
     with gr.Blocks(
-        title="SupportEnv - Customer Support RL Environment",
+        title="SupportEnv Dashboard Pro",
+        theme=theme,
+        css=custom_css,
     ) as demo:
 
-        gr.Markdown("""
-        # SupportEnv - Customer Support Reinforcement Learning Environment
-
-        Train and evaluate AI agents on realistic customer support scenarios.
-        """)
-
+        gr.Markdown("# 🎧 SupportEnv: Professional AI Interface")
+        
         with gr.Tabs() as tabs:
 
             # ============== Tab 1: Interactive Environment ==============
-            with gr.TabItem("Interactive Environment", id=1):
-                gr.Markdown("""
-                ## Interact with the Environment
-
-                Manually control an agent or test different strategies.
-                """)
-
+            with gr.TabItem("🎮 Real-time Agent", id=1):
                 with gr.Row():
                     with gr.Column(scale=1):
-                        gr.Markdown("### Episode Controls")
+                        gr.Markdown("### ⚙️ Session Parameters")
 
                         difficulty_dropdown = gr.Dropdown(
                             choices=["easy", "medium", "hard"],
                             value="easy",
-                            label="Difficulty",
+                            label="Difficulty Tier",
                         )
 
                         seed_input = gr.Number(
-                            label="Seed (optional)",
+                            label="Session Seed",
                             value=42,
                             precision=0,
                         )
 
-                        reset_btn = gr.Button("Start New Episode", variant="primary")
+                        reset_btn = gr.Button("🚀 Initialize Environment", variant="primary")
 
-                        gr.Markdown("### Actions")
+                        gr.Markdown("### 🎮 Control Panel")
 
                         confidence_slider = gr.Slider(
                             minimum=0.0,
                             maximum=1.0,
                             value=1.0,
                             step=0.1,
-                            label="Confidence",
+                            label="Intent Confidence",
                         )
 
                         with gr.Accordion("Classification", open=True):
@@ -727,37 +711,37 @@ def create_gradio_interface():
                 classify_btn.click(
                     fn=env_classify,
                     inputs=[category_dropdown, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 respond_btn.click(
                     fn=env_respond,
                     inputs=[response_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 request_info_btn.click(
                     fn=env_request_info,
                     inputs=[info_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 lookup_kb_btn.click(
                     fn=env_lookup_kb,
                     inputs=[kb_query_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 escalate_btn.click(
                     fn=env_escalate,
                     inputs=[escalate_reason_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 resolve_btn.click(
                     fn=env_resolve,
                     inputs=[resolve_summary_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, classify_btn, respond_btn, request_info_btn, lookup_kb_btn, escalate_btn, resolve_btn],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 grade_btn.click(
@@ -780,7 +764,7 @@ def create_gradio_interface():
                 """)
 
                 baseline_run_btn = gr.Button("Run Baseline on All Difficulties", variant="primary")
-                baseline_output = gr.Markdown("Click the button to run the baseline agent.")
+                baseline_output = gr.Markdown("Click the button to run the baseline agent.", elem_classes=["baseline-box"])
 
                 baseline_run_btn.click(
                     fn=run_baseline,
