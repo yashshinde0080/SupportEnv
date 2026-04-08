@@ -420,148 +420,187 @@ def view_config() -> str:
 
 # ============== UI Construction ==============
 
-def create_ui():
-    """Create the Gradio interface."""
+# ============== UI Construction ==============
+
 CUSTOM_CSS = """
-.gradio-container { max-width: 1200px !important; }
+.gradio-container {
+    background: radial-gradient(circle at 50% 0%, #1a1c2c 0%, #0d0e14 100%) !important;
+    color: #e2e8f0 !important;
+}
 
-/* Content Boxes Aesthetics - Forced Visibility */
-.observation-box, .state-box, .grade-box {
+/* Glassmorphism Panels */
+.observation-box, .state-box, .grade-box, .baseline-box {
+    background: rgba(30, 41, 59, 0.7) !important;
+    backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 16px !important;
+    padding: 24px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+    margin-bottom: 20px !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.observation-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 48px rgba(99, 102, 241, 0.2) !important;
+    border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+/* Visual Separation via Accents */
+.observation-box { border-left: 6px solid #6366f1 !important; }
+.state-box { border-left: 6px solid #10b981 !important; }
+.grade-box { border-left: 6px solid #f59e0b !important; }
+
+/* Text & Typography Visibility */
+.gradio-container * {
+    color: #f1f5f9 !important;
+}
+
+.gradio-container h1, .gradio-container h2, .gradio-container h3 {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.5px !important;
+    margin-bottom: 1rem !important;
+}
+
+.observation-box strong, .state-box strong, .grade-box strong {
+    color: #a5b4fc !important; /* Light indigo for labels */
+}
+
+/* Code block readability in dark mode */
+.observation-box code, .observation-box pre {
+    background: rgba(15, 23, 42, 0.9) !important;
+    color: #38bdf8 !important; /* Sky blue for code content */
+    border-radius: 8px !important;
+    border: 1px solid rgba(56, 189, 248, 0.2) !important;
+    padding: 12px !important;
+    font-family: 'Fira Code', 'Courier New', monospace !important;
+}
+
+/* Table styling for Dark Mode */
+.gradio-container table {
     border-radius: 12px !important;
-    padding: 20px !important;
-    margin: 10px 0 !important;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-    border: 2px solid #ddd !important;
-    background-color: #ffffff !important; /* Force white background */
-    color: #000000 !important; /* Force black text */
+    overflow: hidden !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
 }
 
-/* Force black text for all nested elements (p, span, code, etc) */
-.observation-box *, .state-box *, .grade-box * {
-    color: #000000 !important;
-    background-color: transparent !important;
+.gradio-container th {
+    background: rgba(71, 85, 105, 0.6) !important;
+    color: #ffffff !important;
+    padding: 12px !important;
 }
 
-/* Box-specific border tints for premium look */
-.observation-box { border-color: #4a90d9 !important; border-left: 6px solid #4a90d9 !important; }
-.state-box { border-color: #5cb85c !important; border-left: 6px solid #5cb85c !important; }
-.grade-box { border-color: #f0ad4e !important; border-left: 6px solid #f0ad4e !important; }
-
-/* Headers outside the boxes (labels) */
-.gradio-container h2, .gradio-container h3, .gradio-container p strong {
-    color: inherit; /* Let theme handle global headers */
+.gradio-container td {
+    background: rgba(30, 41, 59, 0.4) !important;
+    padding: 10px !important;
 }
 
-/* Baseline Box Aesthetics */
-.baseline-box {
-    background-color: #ffffff !important;
-    color: #1a1a1a !important;
-    padding: 30px !important;
-    border-radius: 15px !important;
-    border-left: 10px solid #6c757d !important;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2) !important;
-    min-height: 400px !important;
+/* Interaction Effects */
+button.primary {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+    border: none !important;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4) !important;
 }
 
-.baseline-box * {
-    color: #1a1a1a !important;
-}
-
-/* Hover effects */
-.observation-box:hover, .state-box:hover, .grade-box:hover, .baseline-box:hover {
-    transform: translateX(5px);
-    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+button.primary:hover {
+    transform: scale(1.02) !important;
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6) !important;
 }
 """
 
 def create_ui():
     """Create the Gradio interface."""
-    with gr.Blocks(title="SupportEnv Dashboard") as demo:
+    # Custom Theme
+    theme = gr.themes.Soft(
+        primary_hue="indigo",
+        secondary_hue="slate",
+        neutral_hue="slate",
+        font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
+    ).set(
+        body_background_fill="*neutral_950",
+        block_background_fill="*neutral_900",
+        block_border_width="0px",
+    )
+
+    with gr.Blocks(title="SupportEnv Dashboard", theme=theme, css=CUSTOM_CSS) as demo:
         # Hidden state for session ID
         session_id_state = gr.State("")
 
-        gr.Markdown("# 🎧 SupportEnv: Customer Support RL Environment")
+        gr.Markdown("# 🎧 SupportEnv: Pro Support Intelligence")
         
         with gr.Tabs():
             # Tab 1: Interaction
             with gr.Tab("Environment Interaction"):
                 with gr.Row():
                     with gr.Column(scale=1):
-                        gr.Markdown("### Episode Setup")
-                        diff_input = gr.Dropdown(choices=["easy", "medium", "hard"], value="easy", label="Difficulty")
-                        seed_input = gr.Number(label="Seed (0 for random)", value=42, precision=0)
-                        reset_btn = gr.Button("Reset Environment", variant="primary")
+                        gr.Markdown("### ⚙️ Session Setup")
+                        diff_input = gr.Dropdown(choices=["easy", "medium", "hard"], value="easy", label="Task Difficulty")
+                        seed_input = gr.Number(label="Environment Seed (42 recommended)", value=42, precision=0)
+                        reset_btn = gr.Button("🚀 Reset & Start Episode", variant="primary")
                         
-                        gr.Markdown("### Agent Actions")
+                        gr.Markdown("### 🎮 Agent Controls")
                         conf_slider = gr.Slider(0.0, 1.0, value=1.0, step=0.05, label="Action Confidence")
                         
-                        with gr.Accordion("Ticket Actions", open=True):
+                        with gr.Accordion("Ticket Action Engine", open=True):
                             with gr.Tabs():
                                 with gr.Tab("Classify"):
-                                    cat_input = gr.Dropdown(["billing", "technical", "account", "general"], label="Category")
-                                    classify_btn = gr.Button("Submit Grouping")
+                                    cat_input = gr.Dropdown(["billing", "technical", "account", "general"], value="general", label="Customer Category")
+                                    classify_btn = gr.Button("Submit Classification")
                                 with gr.Tab("Respond"):
-                                    resp_input = gr.Textbox(placeholder="Type your response...", lines=3, label="Customer Message")
-                                    respond_btn = gr.Button("Send to Customer")
+                                    resp_input = gr.Textbox(placeholder="Compose your message to the customer...", lines=4, label="Response Content")
+                                    respond_btn = gr.Button("Send Message")
                                 with gr.Tab("Gather Info"):
-                                    info_input = gr.Textbox(placeholder="What do you need?", label="Request Info")
-                                    info_btn = gr.Button("Ask Customer")
-                                    kb_input = gr.Textbox(placeholder="e.g. refund policy", label="KB Query")
-                                    kb_btn = gr.Button("Search KB")
-                                with gr.Tab("Finish"):
-                                    res_input = gr.Textbox(placeholder="How was it resolved?", label="Resolution")
-                                    resolve_btn = gr.Button("Solve Ticket", variant="stop")
-                                    esc_input = gr.Textbox(placeholder="Reason for escalation...", label="Escalation Reason")
-                                    escalate_btn = gr.Button("Escalate", variant="stop")
+                                    info_input = gr.Textbox(placeholder="What information do you need?", label="Request Details")
+                                    info_btn = gr.Button("Request Information")
+                                    kb_input = gr.Textbox(placeholder="Search term...", label="KB Knowledge Search")
+                                    kb_btn = gr.Button("Search Knowledge Base")
+                                with gr.Tab("Resolution"):
+                                    res_input = gr.Textbox(placeholder="Summarize the final resolution...", label="Resolution Notes")
+                                    resolve_btn = gr.Button("Resolve Ticket", variant="stop")
+                                    esc_input = gr.Textbox(placeholder="Reason for transfer...", label="Escalation Details")
+                                    escalate_btn = gr.Button("Escalate Ticket", variant="stop")
 
                     with gr.Column(scale=2):
-                        gr.Markdown("### Agent Observation")
-                        obs_out = gr.Markdown("Start an episode to see observation.", elem_classes=["observation-box"])
+                        gr.Markdown("### 👁️ Observation Stream")
+                        obs_out = gr.Markdown("Initialize an episode to start receiving data.", elem_classes=["observation-box"])
                         
                         with gr.Row():
                             with gr.Column():
-                                gr.Markdown("### Internal State")
-                                state_out = gr.Markdown("N/A", elem_classes=["state-box"])
+                                gr.Markdown("### 🧠 Internal State")
+                                state_out = gr.Markdown("System inactive", elem_classes=["state-box"])
                             with gr.Column():
-                                gr.Markdown("### Grade Result")
-                                grade_out = gr.Markdown("Finish episode to see grade.", elem_classes=["grade-box"])
+                                gr.Markdown("### 🏆 Performance Grade")
+                                grade_out = gr.Markdown("Awaiting episode completion.", elem_classes=["grade-box"])
 
             with gr.Tab("Baseline Agent"):
-                gr.Markdown("### 🤖 Heuristic Baseline Evaluation\nClick below to run the built-in heuristic agent on all difficulties. This will simulate actual episodes and calculate performance.")
-                baseline_btn = gr.Button("🚀 Run Full Evaluation", variant="secondary", size="lg")
-                baseline_out = gr.Markdown("Baseline results will appear here.", elem_classes=["baseline-box"])
+                gr.Markdown("### 🤖 Heuristic Benchmark Agent\nTest the built-in rule-based agent across all tiers to establish a performance baseline.")
+                baseline_btn = gr.Button("⚡ Run Heuristic Evaluation", variant="secondary")
+                baseline_out = gr.Markdown("Benchmarking results will appear here.", elem_classes=["baseline-box"])
                 baseline_btn.click(fn=run_baseline, outputs=baseline_out)
 
             # Tab 3: Tasks
-            with gr.Tab("Task Catalog"):
-                refresh_tasks_btn = gr.Button("Load Tasks")
-                task_details_out = gr.Markdown("")
-                task_df_out = gr.Dataframe()
+            with gr.Tab("Task Repository"):
+                refresh_tasks_btn = gr.Button("Load Available Tasks", variant="secondary")
+                task_details_out = gr.Markdown("No tasks loaded.")
+                task_df_out = gr.Dataframe(interactive=False)
                 refresh_tasks_btn.click(fn=load_tasks, outputs=[task_details_out, task_df_out])
 
-            # Tab 4: Global Metrics
-            with gr.Tab("Analytics"):
-                refresh_metrics_btn = gr.Button("Refresh Metrics")
-                metrics_summary_out = gr.Markdown("")
-                metrics_df_out = gr.Dataframe()
+            # Tab 4: Analytics
+            with gr.Tab("Metrics Dashboard"):
+                refresh_metrics_btn = gr.Button("Refresh Analytics", variant="secondary")
+                metrics_summary_out = gr.Markdown("No analytics data.")
+                metrics_df_out = gr.Dataframe(interactive=False)
                 refresh_metrics_btn.click(fn=load_metrics, outputs=[metrics_summary_out, metrics_df_out])
 
             # Tab 5: History
-            with gr.Tab("Log History"):
+            with gr.Tab("Session Logs"):
                 with gr.Row():
-                    refresh_hist_btn = gr.Button("Refresh Logs")
-                    clear_hist_btn = gr.Button("Clear Session Logs", variant="stop")
-                hist_summary_out = gr.Markdown("")
-                hist_df_out = gr.Dataframe()
+                    refresh_hist_btn = gr.Button("Refresh Log History", variant="secondary")
+                    clear_hist_btn = gr.Button("Clear Logs", variant="stop")
+                hist_summary_out = gr.Markdown("No logs in current session.")
+                hist_df_out = gr.Dataframe(interactive=False)
                 refresh_hist_btn.click(fn=view_history, outputs=[hist_summary_out, hist_df_out])
                 clear_hist_btn.click(fn=clear_history, outputs=[hist_summary_out, hist_df_out])
-
-            # Tab 6: Info
-            with gr.Tab("System Config"):
-                refresh_conf_btn = gr.Button("Refresh Config")
-                conf_out = gr.Markdown("")
-                refresh_conf_btn.click(fn=view_config, outputs=conf_out)
 
         # Event wiring
         reset_btn.click(
@@ -582,4 +621,4 @@ def create_ui():
 
 if __name__ == "__main__":
     ui = create_ui()
-    ui.launch(server_name="0.0.0.0", server_port=7860, css=CUSTOM_CSS, theme=gr.themes.Soft())
+    ui.launch(server_name="0.0.0.0", server_port=7860)
