@@ -379,7 +379,7 @@ async def curriculum_endpoint(request: CurriculumRequest):
 
 # Import Gradio UI
 try:
-    from frontend.gradio_ui import create_gradio_interface
+    from gradio_ui import create_gradio_interface
     import gradio as gr
     
     demo, theme, css = create_gradio_interface()

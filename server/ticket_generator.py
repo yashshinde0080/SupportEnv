@@ -407,7 +407,386 @@ HARD_TICKETS = [
         difficulty="hard",
         keywords=["ruined", "late", "compensation", "escalate", "disappointed"]
     ),
+    TicketTemplate(
+        category="billing",
+        subject="FRAUD: Multiple unknown charges!",
+        body="""URGENT!!! I see 15 different charges from your company that I never authorized! 
+        This is theft! I'm calling the police right now unless you reverse this IMMEDIATELY. 
+        I've already locked my cards!""",
+        sentiment=-0.95,
+        expected_resolution="Immediate account freeze and escalation to fraud department.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["fraud", "theft", "charges", "police", "urgent"]
+    ),
+    TicketTemplate(
+        category="technical",
+        subject="CRITICAL: Database wipe after migration",
+        body="""Wait, are you kidding me? We just performed the sync you recommended and my entire 
+        client database is EMPTY. 500+ contacts gone. We have a major presentation in 2 hours. 
+        FIX THIS NOW or we are moving to a competitor.""",
+        sentiment=-0.9,
+        expected_resolution="Escalate to engineering for immediate data recovery attempt.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["migration", "data loss", "empty", "presentation", "senior"]
+    ),
+    TicketTemplate(
+        category="account",
+        subject="LOCKED OUT: Medical Emergency",
+        body="""I need to access my account to get my medical records for my doctor's appointment 
+        in 20 minutes! Your 2FA is not sending me codes. THIS IS A LIFE SAFETY ISSUE. 
+        Don't tell me to wait 24 hours!""",
+        sentiment=-0.9,
+        expected_resolution="Verify ID manually and provide emergency temporary access.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["2fa", "emergency", "medical", "locked out", "safety"]
+    ),
+    TicketTemplate(
+        category="general",
+        subject="PR DISASTER: Discriminatory behavior observed",
+        body="""Your manager at the {location} location was incredibly rude and used discriminatory 
+        language towards me today. I have the whole encounter on video and it's already going viral 
+        on TikTok. What are you going to do before my lawyer calls?""",
+        sentiment=-0.95,
+        expected_resolution="Escalate to PR and Legal teams immediately.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["discrimination", "viral", "tiktok", "lawyer", "manager"]
+    ),
+    TicketTemplate(
+        category="billing",
+        subject="SCAM: Subscription won't cancel",
+        body="""I have tried to cancel my subscription 5 times and you keep charging me ${amount} 
+        every month! This is predatory. I am reporting you to the Better Business Bureau and 
+        filing a chargeback for the last 6 months!""",
+        sentiment=-0.85,
+        expected_resolution="Confirm cancellation and refund all overcharges as a gesture of goodwill.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["scam", "bbb", "chargeback", "cancel", "predatory"]
+    ),
+    TicketTemplate(
+        category="technical",
+        subject="SYSTEM DOWN: E-commerce store checkout failed",
+        body="""Our checkout page is returning 500 errors during our biggest sale of the year. 
+        We are losing thousands of dollars every minute. If this isn't fixed in the next 10 minutes, 
+        I am holding your company financially responsible for our lost revenue.""",
+        sentiment=-0.95,
+        expected_resolution="Priority 1 escalation to site reliability engineering.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["500 error", "revenue loss", "checkout", "fix", "reliability"]
+    ),
+    TicketTemplate(
+        category="account",
+        subject="HACKED: Identity theft and bank sync",
+        body="""Someone hacked my account and now they are making purchases through my synced 
+        bank account! I've been a loyal customer for years and your security let me down. 
+        I want all syncs disabled and a full security audit NOW.""",
+        sentiment=-0.9,
+        expected_resolution="Freeze account and disable all financial integrations immediately.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["hacked", "bank sync", "security", "fail", "audit"]
+    ),
+    TicketTemplate(
+        category="general",
+        subject="LEGAL: Breach of Privacy Policy",
+        body="""I found my private documents accessible via a public link on your platform. 
+        This is a massive GDPR violation and puts my business at risk. I've screen-captured 
+        the proof. My legal team is preparing a notice as we speak.""",
+        sentiment=-0.9,
+        expected_resolution="Immediate takedown of link and escalation to security and legal.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["privacy", "gdpr", "legal", "violation", "breach"]
+    ),
+    TicketTemplate(
+        category="billing",
+        subject="REFUND DENIED: Faulty expensive hardware",
+        body="""I spent ${amount} on the {product} and it stopped working after 2 days. 
+        Your support said 'all sales are final'. That's illegal! I want my money back or 
+        I'm taking this to small claims court.""",
+        sentiment=-0.8,
+        expected_resolution="Waive policy and process refund for defective premium hardware.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["refund", "faulty", "hardware", "small claims", "illegal"]
+    ),
+    TicketTemplate(
+        category="technical",
+        subject="API FAILURE: Critical infrastructure offline",
+        body="""The API integration for our logistics platform is down, and none of our trucks 
+        can get their routes. This is causing a massive shipment delay across the state. 
+        We need an immediate rollback or fix from a senior engineer.""",
+        sentiment=-0.85,
+        expected_resolution="Escalate to DevOps for API health investigation.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["api", "infrastructure", "offline", "logistics", "delay"]
+    ),
+    TicketTemplate(
+        category="account",
+        subject="FORCED LOGOUT: Lost work session",
+        body="""Your system just logged me out while I was in the middle of a 4-hour unsaved project. 
+        All my work is gone. Why was there no warning? I demand a way to recover this data or 
+        compensation for my wasted time.""",
+        sentiment=-0.75,
+        expected_resolution="Investigate session logs and offer credits as compensation for lost time.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["logout", "lost work", "unsaved", "data recovery", "wasted"]
+    ),
+    TicketTemplate(
+        category="general",
+        subject="SAFETY: Product malfunction causing injury",
+        body="""The {product} I bought from you collapsed while I was sitting in it, and I've 
+        injured my back. I am currently at the ER. I expect your company to cover my medical bills 
+        and replace this dangerous product.""",
+        sentiment=-1.0,
+        expected_resolution="Immediate escalation to legal and safety compliance team.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["injury", "safety", "er", "medical bills", "malfunction"]
+    ),
+    TicketTemplate(
+        category="billing",
+        subject="TAX ERROR: Overcharged on sales tax",
+        body="""You charged me 15% sales tax when my state only has 5%. This is tax fraud on a 
+        corporate level. I've already alerted the State Department of Revenue. I want a refund 
+        for the overcharged amount across all my orders.""",
+        sentiment=-0.8,
+        expected_resolution="Recalculate tax and refund the discrepancy immediately.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["tax fraud", "overcharged", "refund", "state", "revenue"]
+    ),
+    TicketTemplate(
+        category="technical",
+        subject="APP CRASH: Cannot access event tickets",
+        body="""I am standing at the entrance to the stadium and your app keeps crashing when 
+        I try to show my QR code. I paid ${amount} for these seats and I'm about to miss 
+        the start! DO SOMETHING!""",
+        sentiment=-0.95,
+        expected_resolution="Provide manual ticket verification steps or an alternative entry method.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["crash", "tickets", "stadium", "qr code", "urgent"]
+    ),
+    TicketTemplate(
+        category="account",
+        subject="2FA LOCK: Phone stolen",
+        body="""My phone was stolen and I can't use 2FA to get into my account. Your 'recovery' 
+        process is asking me for info I don't have. I need to freeze my account immediately 
+        before the thief drains my wallet!""",
+        sentiment=-0.9,
+        expected_resolution="Suspend account activity and initiate emergency verification.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["stolen", "2fa", "recovery", "freeze", "wallet"]
+    ),
+    TicketTemplate(
+        category="general",
+        subject="COMPLAINT: Harassment from support representative",
+        body="""I spoke to an agent named {name} who was extremely unprofessional and started 
+        messaging me on my personal social media after the call. This is stalking. I want them 
+        fired and I'm calling the police.""",
+        sentiment=-1.0,
+        expected_resolution="Immediate investigation by HR and account security team.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["harassment", "stalking", "fired", "police", "unprofessional"]
+    ),
+    TicketTemplate(
+        category="billing",
+        subject="PRICE GOUGING: Sudden subscription hike",
+        body="""You just doubled my subscription price without any email or notification! This 
+        is bait-and-switch. I want my old rate restored or I'm organizing a mass cancellation 
+        on Reddit.""",
+        sentiment=-0.8,
+        expected_resolution="Honor the original price for 12 months as a bridge.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["price gouging", "reddit", "cancel", "bait and switch", "hike"]
+    ),
+    TicketTemplate(
+        category="technical",
+        subject="DATA LEAK: I can see other people's data",
+        body="""When I log in, I am seeing order history and addresses for OTHER customers. 
+        This is the biggest security failure I've ever seen. I am reporting this to the news 
+        immediately unless you shut down the site now.""",
+        sentiment=-1.0,
+        expected_resolution="Critical incident trigger: Shut down affected service and escalate to CISO.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["data leak", "security", "news", "shut down", "privacy"]
+    ),
+    TicketTemplate(
+        category="account",
+        subject="DELETED: My account disappeared",
+        body="""I went to log in and it says 'email not found'. I have $500 in store credit on 
+        that account! Where did it go? If you've stolen my credit, I will see you in court.""",
+        sentiment=-0.9,
+        expected_resolution="Escalate to data engineering to restore the 'soft-deleted' account.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["disappeared", "court", "store credit", "stolen", "missing"]
+    ),
+    TicketTemplate(
+        category="general",
+        subject="REFUND: Promised features missing",
+        body="""The {product} does not do half of what your marketing promised. It's a paperweight. 
+        I want a full refund and for you to pay for the return shipping. Your ads are deceptive.""",
+        sentiment=-0.8,
+        expected_resolution="Process full refund and provide prepaid shipping label.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["refund", "marketing", "deceptive", "paperweight", "prepaid"]
+    ),
+    TicketTemplate(
+        category="billing",
+        subject="UNAUTHORIZED: Recurring charge after cancellation",
+        body="""I cancelled my account 3 months ago and I'm STILL being charged. I have the 
+        cancellation confirmation email! Stop stealing my money or I'll have my bank flag you 
+        as a fraudulent merchant.""",
+        sentiment=-0.85,
+        expected_resolution="Refund all post-cancellation charges and audit billing system.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["recurring", "unauthorized", "stealing", "bank", "fraudulent"]
+    ),
+    TicketTemplate(
+        category="technical",
+        subject="FIRMWARE BRICK: Update killed my device",
+        body="""I just ran the firmware update you sent out and now my {product} won't even 
+        show a splash screen. It's totally dead. It was working fine before the update. 
+        You owe me a new monitor.""",
+        sentiment=-0.8,
+        expected_resolution="Arrange immediate express replacement for 'bricked' device.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["bricked", "firmware", "replacement", "dead", "update"]
+    ),
+    TicketTemplate(
+        category="account",
+        subject="LOCKED: Suspected fraud but it's me",
+        body="""You locked my account for 'suspicious activity' while I'm traveling and now 
+        I can't pay for my hotel! I've been on hold for 2 hours. I have all my ID ready. 
+        UNLOCK IT NOW!""",
+        sentiment=-0.9,
+        expected_resolution="High-priority identity verification for traveler.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["locked", "traveling", "fraud", "hotel", "unlock"]
+    ),
+    TicketTemplate(
+        category="general",
+        subject="THREAT: Going to the BBB and FTC",
+        body="""Your refusal to acknowledge the defect in the {product} is a violation of 
+        consumer protection laws. I've already drafted my complaints to the BBB and FTC. 
+        This is your last chance to make it right.""",
+        sentiment=-0.85,
+        expected_resolution="De-escalate by offering a goodwill replacement or voucher.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["bbb", "ftc", "consumer laws", "defect", "threat"]
+    ),
+    TicketTemplate(
+        category="billing",
+        subject="ERROR: Charged in wrong currency",
+        body="""I was charged ${amount} in USD but I'm in the UK. My bank hit me with massive 
+        conversion fees because your site gave me the wrong price. I want the difference refunded.""",
+        sentiment=-0.7,
+        expected_resolution="Refund the currency conversion discrepancy.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["currency", "fees", "discrepancy", "usd", "uk"]
+    ),
+    TicketTemplate(
+        category="technical",
+        subject="FAILURE: Automation script deleted files",
+        body="""The new automation tool you released just deleted 30GB of my project files instead 
+        of archiving them. There was no 'Are you sure?' prompt. This is amateur hour. 
+        How do I get them back?""",
+        sentiment=-0.9,
+        expected_resolution="Escalate to cloud engineering to attempt version recovery.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["deleted", "files", "amateur", "recovery", "automation"]
+    ),
+    TicketTemplate(
+        category="account",
+        subject="BREACH: My password was leaked",
+        body="""I saw my email from your site in a recent data dump on 'Have I Been Pwned'. 
+        Why didn't you notify me? I want to know exactly what was leaked and I'm closing my account.""",
+        sentiment=-0.8,
+        expected_resolution="Provide breach details and help customer close account securely.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["leaked", "pwned", "breach", "password", "notify"]
+    ),
+    TicketTemplate(
+        category="general",
+        subject="INCIDENT: Product caught fire",
+        body="""The charging cable for the {product} started smoking and melted today. It almost 
+        caught my curtains on fire! This is a dangerous hazard. I want a full recall investigation 
+        and a refund.""",
+        sentiment=-1.0,
+        expected_resolution="IMMEDIATE escalation to safety engineering and legal.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["fire", "hazard", "recall", "melting", "dangerous"]
+    ),
+    TicketTemplate(
+        category="billing",
+        subject="PENDING: Charges not clearing but money gone",
+        body="""There are 4 'pending' charges from you that haven't cleared but have locked up 
+        all the funds in my checking account. My rent is due today! Clear these holds IMMEDIATELY!""",
+        sentiment=-0.9,
+        expected_resolution="Contact finance to issue immediate VOID on pending holds.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["pending", "rent", "checking account", "holds", "clear"]
+    ),
+    TicketTemplate(
+        category="technical",
+        subject="INCOMPATIBLE: Update broke my legacy sync",
+        body="""Your 'improvement' update broke the sync with my legacy database that I've used 
+        for 10 years. You never mentioned this was a breaking change. My office is at a standstill. 
+        I need an old version installer NOW.""",
+        sentiment=-0.85,
+        expected_resolution="Provide legacy installer link and escalate to compatibility team.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["legacy", "breaking change", "standstill", "sync", "installer"]
+    ),
+    TicketTemplate(
+        category="account",
+        subject="DENIED: Cannot verify identity with valid ID",
+        body="""I uploaded my passport and drivers license and your system keeps saying 'invalid'. 
+        I am who I say I am! Give me a human to talk to before I sue for account withholding.""",
+        sentiment=-0.8,
+        expected_resolution="Escalate for manual ID verification by human security agent.",
+        requires_escalation=True,
+        difficulty="hard",
+        keywords=["denied", "passport", "human", "verification", "invalid"]
+    ),
+    TicketTemplate(
+        category="general",
+        subject="REPUTATION: Terrible service in store",
+        body="""I visited your Northbranch store and was ignored for 45 minutes while employees 
+        chatted among themselves. I'm a gold member! I'm taking my business to your competitor 
+        and telling everyone on Yelp.""",
+        sentiment=-0.9,
+        expected_resolution="Escalate to store operations and offer a significant 'Member's Apology' voucher.",
+        requires_escalation=False,
+        difficulty="hard",
+        keywords=["yelp", "ignored", "competitor", "gold member", "terrible"]
+    ),
 ]
+
 
 CUSTOMER_NAMES = [
     "John Smith", "Sarah Johnson", "Michael Chen", "Emily Davis", "Robert Wilson",

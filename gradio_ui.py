@@ -214,7 +214,6 @@ def env_step(action_type: str, content: str, confidence: float = 1.0) -> tuple:
     state_text = format_state(state_result) if 'error' not in state_result else ""
 
     # If done, automatically fetch grade
-    grade_text = ""
     if result.get('done', False):
         time.sleep(0.1)  # Small delay to ensure server processed
         grade_result = call_api("/grader", method="POST", json_data={"session_id": current_session})
@@ -228,8 +227,10 @@ def env_step(action_type: str, content: str, confidence: float = 1.0) -> tuple:
             "passed": grade_result.get('passed', False),
             "total_reward": current_observation.get('ticket_text', '')[:50],
         })
+    else:
+        grade_text = gr.update()
 
-    return obs_text, state_text, grade_text, gr.update()
+    return obs_text, state_text, grade_text
 
 
 def env_classify(category: str, confidence: float) -> tuple:
@@ -499,66 +500,63 @@ def create_gradio_interface():
 
     # Custom CSS
     custom_css = """
-    /* Global text color override */
-    body, .gradio-container, .prose, .prose * {
-        color: #ffffff !important;
-    }
-    
     .gradio-container {
         max-width: 1400px !important;
-        background-color: #0b0f19 !important; /* Deep dark background */
+        background-color: #0b0f19 !important; /* Deep dark background default */
     }
     
-    .observation-box {
-        border: 1px solid rgba(74, 144, 217, 0.5);
-        border-radius: 12px;
-        padding: 20px;
-        margin: 12px 0;
-        background: linear-gradient(135deg, #1e3a5f 0%, #0d1b2a 100%) !important;
-        color: #ffffff !important;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    /* Content Boxes - Forced Visibility Aesthetics */
+    .observation-box, .state-box, .grade-box {
+        border-radius: 12px !important;
+        padding: 20px !important;
+        margin: 12px 0 !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+        border: 2px solid #ddd !important;
+        background-color: #ffffff !important; /* Force white background */
+        color: #000000 !important; /* Force black text */
     }
-    
-    .observation-box p, .observation-box strong, .observation-box span, .observation-box code {
-        color: #ffffff !important;
+
+    /* Force black text for all nested elements */
+    .observation-box *, .state-box *, .grade-box * {
+        color: #000000 !important;
+        background-color: transparent !important;
     }
-    
-    .state-box {
-        border: 1px solid rgba(92, 184, 92, 0.5);
-        border-radius: 12px;
-        padding: 20px;
-        margin: 12px 0;
-        background: linear-gradient(135deg, #1d3a1d 0%, #0d1a0d 100%) !important;
-        color: #ffffff !important;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+
+    /* Baseline Result Aesthetics */
+    .baseline-box {
+        background-color: #ffffff !important;
+        color: #1a1a1a !important;
+        padding: 30px !important;
+        border-radius: 12px !important;
+        border-left: 10px solid #6c757d !important;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1) !important;
+        min-height: 400px !important;
     }
-    
-    .state-box p, .state-box strong, .state-box span {
-        color: #ffffff !important;
+
+    .baseline-box * {
+        color: #1a1a1a !important;
     }
-    
-    .grade-box {
-        border: 1px solid rgba(240, 173, 78, 0.5);
-        border-radius: 12px;
-        padding: 20px;
-        margin: 12px 0;
-        background: linear-gradient(135deg, #4d3319 0%, #1a1108 100%) !important;
-        color: #ffffff !important;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+
+    /* Hover effects */
+    .observation-box:hover, .state-box:hover, .grade-box:hover, .baseline-box:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
     }
-    
-    .grade-box p, .grade-box strong, .grade-box span {
-        color: #ffffff !important;
-    }
-    
-    /* Ensure all markdown headers are white */
+
+    /* Premium border-left tints */
+    .observation-box { border-color: #4a90d9 !important; border-left: 6px solid #4a90d9 !important; }
+    .state-box { border-color: #5cb85c !important; border-left: 6px solid #5cb85c !important; }
+    .grade-box { border-color: #f0ad4e !important; border-left: 6px solid #f0ad4e !important; }
+
+    /* Headers / Labels outside the boxes */
     .gradio-container h1, .gradio-container h2, .gradio-container h3 {
-        color: #ffffff !important;
+        color: #ffffff !important; /* Keep headers white on dark background */
     }
     
-    /* Fix for button text which sometimes gets lost */
     button.primary, button.secondary {
         color: white !important;
+        font-weight: 600 !important;
     }
     """
 
@@ -702,37 +700,37 @@ def create_gradio_interface():
                 classify_btn.click(
                     fn=env_classify,
                     inputs=[category_dropdown, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 respond_btn.click(
                     fn=env_respond,
                     inputs=[response_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 request_info_btn.click(
                     fn=env_request_info,
                     inputs=[info_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 lookup_kb_btn.click(
                     fn=env_lookup_kb,
                     inputs=[kb_query_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 escalate_btn.click(
                     fn=env_escalate,
                     inputs=[escalate_reason_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 resolve_btn.click(
                     fn=env_resolve,
                     inputs=[resolve_summary_textbox, confidence_slider],
-                    outputs=[observation_output, state_output, grade_output, state_output],
+                    outputs=[observation_output, state_output, grade_output],
                 )
 
                 grade_btn.click(
@@ -755,7 +753,7 @@ def create_gradio_interface():
                 """)
 
                 baseline_run_btn = gr.Button("Run Baseline on All Difficulties", variant="primary")
-                baseline_output = gr.Markdown("Click the button to run the baseline agent.")
+                baseline_output = gr.Markdown("Click the button to run the baseline agent.", elem_classes=["baseline-box"])
 
                 baseline_run_btn.click(
                     fn=run_baseline,
