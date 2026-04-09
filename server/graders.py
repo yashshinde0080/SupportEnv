@@ -115,8 +115,12 @@ class SupportGrader:
         ordering_penalty = self._grade_action_ordering(action_history)
         total_score += ordering_penalty
         
-        # Ensure score is in valid range
-        total_score = max(0.0, min(1.0, total_score))
+        # Ensure breakdown scores are strictly in (0, 1) range
+        for key in breakdown:
+            breakdown[key] = max(0.01, min(0.99, breakdown[key]))
+            
+        # Ensure total score is strictly in (0, 1) range - REQUIRED by hackathon validation
+        total_score = max(0.01, min(0.99, total_score))
         
         # Generate feedback
         feedback = self._generate_feedback(breakdown, task_difficulty)

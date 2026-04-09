@@ -156,7 +156,7 @@ def main() -> None:
         rewards: List[float] = []
         steps_taken = 0
         success = False
-        final_score = 0.0
+        final_score = 0.01
         
         try:
             with env.sync() as conn:
@@ -212,7 +212,7 @@ def main() -> None:
                     grade_resp = requests.post(grader_url, json={"session_id": session_id}, timeout=30)
                     if grade_resp.status_code == 200:
                         grade_data = grade_resp.json()
-                        final_score = float(grade_data.get('score', 0.0))
+                        final_score = float(grade_data.get('score', 0.01))
                         success = bool(grade_data.get('passed', False))
                 except Exception:
                     pass
@@ -220,7 +220,7 @@ def main() -> None:
                 log_end(success=success, steps=steps_taken, score=final_score, rewards=rewards)
                     
         except Exception as e:
-            log_end(success=False, steps=steps_taken, score=0.0, rewards=rewards)
+            log_end(success=False, steps=steps_taken, score=0.01, rewards=rewards)
 
 if __name__ == "__main__":
     main()
