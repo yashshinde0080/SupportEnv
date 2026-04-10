@@ -107,7 +107,7 @@ class SupportEnvironment(Environment):
             task_difficulty=difficulty,
             max_steps=max_steps,
             classification_correct=False,
-            response_quality_score=0.0,
+            response_quality_score=0.01,
             escalation_correct=False,
             resolved=False,
             total_reward=0.0

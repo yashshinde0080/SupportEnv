@@ -56,11 +56,11 @@ SESSION_TTL_SECONDS = 3600
 # Global metrics tracking
 METRICS = {
     "total_episodes": 0,
-    "success_rate": 0.0,
+    "success_rate": 0.01,
     "total_successful": 0,
-    "avg_easy_score": 0.0,
-    "avg_medium_score": 0.0,
-    "avg_hard_score": 0.0,
+    "avg_easy_score": 0.01,
+    "avg_medium_score": 0.01,
+    "avg_hard_score": 0.01,
     "scores_by_difficulty": {"easy": [], "medium": [], "hard": []}
 }
 

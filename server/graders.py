@@ -118,10 +118,10 @@ class SupportGrader:
         # Ensure breakdown scores are strictly in (0, 1) range
         # Use 0.01 and 0.99 to be safe and clear of the boundaries
         for key in breakdown:
-            breakdown[key] = max(0.01, min(0.99, breakdown[key]))
+            breakdown[key] = max(0.01, min(0.99, float(breakdown[key])))
             
         # Ensure total score is strictly in (0, 1) range - REQUIRED by hackathon validation
-        total_score = max(0.01, min(0.99, total_score))
+        total_score = max(0.01, min(0.99, float(total_score)))
         
         # Generate feedback
         feedback = self._generate_feedback(breakdown, task_difficulty)
@@ -163,14 +163,14 @@ class SupportGrader:
         ]
         
         if not classifications:
-            return 0.0  # No classification attempted
+            return 0.01  # No classification attempted (clamped to 0.01)
         
         # Check first classification (most important)
         first_class = classifications[0].get("content", "").lower().strip()
         target_clean = target.lower().strip()
         
         if first_class == target_clean:
-            return 1.0
+            return 0.99
         
         # Partial credit for related categories
         category_relations = {
@@ -204,7 +204,7 @@ class SupportGrader:
         ]
 
         if not responses:
-            return 0.0
+            return 0.01
 
         total_score = 0.0
 
@@ -296,7 +296,7 @@ class SupportGrader:
             if avg_score < 0.6:
                 avg_score *= 0.85          # weak response on a medium task
 
-        return max(0.0, min(1.0, avg_score))
+        return max(0.01, min(0.99, avg_score))
     
     def _grade_escalation(
         self,
@@ -337,22 +337,25 @@ class SupportGrader:
             # Check reason quality
             reason = escalations[0].get("content", "")
             if len(reason.split()) >= 10 and any(kw in reason.lower() for kw in ["immediate", "severity", "sensitivity", "human"]):
-                return 1.0
+                return 0.99
             elif len(reason.split()) >= 5:
                 return 0.9
             return 0.7  # Right decision but poor explanation
 
         elif not should_escalate and not escalated:
             # Correct: did not escalate when not needed
-            return 1.0
+            return 0.99
 
         elif should_escalate and not escalated:
             # Wrong: should have escalated but didn't
-            return 0.0  # Harsher penalty for missing required escalation
+            return 0.01  # Harsher penalty for missing required escalation
 
         else:
             # Wrong: escalated when not needed (unnecessary escalation)
             return 0.1  # Harsher penalty for wasting resources
+
+        # Final safety clamp
+        return max(0.01, min(0.99, 0.0)) # This line shouldn't be reached but for safety
     
     def _grade_resolution(
         self,
@@ -412,12 +415,12 @@ class SupportGrader:
         base_score = overlap_ratio * 0.7
         action_bonus = 0.3 if has_action_word else 0.0
 
-        return min(1.0, base_score + action_bonus)
+        return max(0.01, min(0.99, base_score + action_bonus))
     
     def _grade_efficiency(self, steps: int, max_steps: int, difficulty: str = "easy") -> float:
         """Grade step efficiency. Harder tasks require more deliberation."""
         if steps <= 1:
-            return 1.0 if difficulty == "easy" else 0.5 # Discourage one-step solutions for complex tasks
+            return 0.99 if difficulty == "easy" else 0.5 # Discourage one-step solutions for complex tasks
         
         # Stricter for hard: optimal path is usually 4-6 steps
         if difficulty == "hard":
@@ -425,12 +428,12 @@ class SupportGrader:
             if steps < 5:
                 return 0.4 # Superficial handling
             if steps <= 9:
-                return 1.0 # High quality deliberation
+                return 0.99 # High quality deliberation
             # Penalize the tail end for inefficiency
-            return round(max(0.3, 1.0 - 0.8 * ((steps - 9) / (max_steps - 9))), 2)
+            return max(0.01, min(0.99, round(max(0.3, 1.0 - 0.8 * ((steps - 9) / (max_steps - 9))), 2)))
             
         # Standard linear for easy/medium
-        return round(1.0 - 0.8 * ((steps - 1) / (max_steps - 1)), 2)
+        return max(0.01, min(0.99, round(1.0 - 0.8 * ((steps - 1) / (max_steps - 1)), 2)))
     
     def _get_weights(self, difficulty: str) -> Dict[str, float]:
         """Get grading weights based on difficulty."""

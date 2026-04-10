@@ -45,14 +45,14 @@ class SemanticScorer:
         Returns a dict with empathy, solution, and resolution alignment scores.
         """
         if not responses or not expected_resolution:
-            return {"empathy": 0.0, "solution": 0.0, "resolution": 0.0, "overall": 0.0}
+            return {"empathy": 0.01, "solution": 0.01, "resolution": 0.01, "overall": 0.01}
 
         if self.model is None:
-            return None
+            return {"empathy": 0.01, "solution": 0.01, "resolution": 0.01, "overall": 0.01}
 
         combined_response = " ".join([r for r in responses if len(r) > 10])
         if not combined_response:
-            return {"empathy": 0.0, "solution": 0.0, "resolution": 0.0, "overall": 0.0}
+            return {"empathy": 0.01, "solution": 0.01, "resolution": 0.01, "overall": 0.01}
 
         try:
             from sklearn.metrics.pairwise import cosine_similarity
@@ -71,13 +71,13 @@ class SemanticScorer:
             sim_solution = float(cosine_similarity(embedded_resp, emb_solution)[0][0])
             sim_resolution = float(cosine_similarity(embedded_resp, emb_resolution)[0][0])
             
-            # Non-linear scaling: 0.2 similarity is baseline, 0.9 similarity is perfect.
+            # Non-linear scaling: 0.1 similarity is baseline, 0.8 similarity is perfect.
             def scale(sim):
-                return min(1.0, max(0.0, (sim - 0.1) / 0.7))
+                return min(0.99, max(0.01, (sim - 0.1) / 0.7))
 
             empathy_score = scale(sim_empathy)
             solution_score = scale(sim_solution)
-            resolution_score = max(0.0, min(1.0, (sim_resolution - 0.2) / 0.7))
+            resolution_score = max(0.01, min(0.99, (sim_resolution - 0.2) / 0.7))
 
             overall = (empathy_score * 0.2) + (solution_score * 0.2) + (resolution_score * 0.6)
             

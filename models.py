@@ -90,7 +90,7 @@ class SupportState(State):
 
     # Performance tracking
     classification_correct: bool = False
-    response_quality_score: float = 0.0
+    response_quality_score: float = Field(default=0.01, ge=0.0, le=1.0)
     escalation_correct: bool = False
     resolved: bool = False
 
@@ -111,7 +111,7 @@ class PublicSupportState(State):
 
     # Performance tracking
     classification_correct: bool = False
-    response_quality_score: float = 0.0
+    response_quality_score: float = Field(default=0.01, ge=0.0, le=1.0)
     escalation_correct: bool = False
     resolved: bool = False
 
