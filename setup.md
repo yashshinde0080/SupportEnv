@@ -221,6 +221,9 @@ python baseline/run_baseline.py
 | Medium | ~0.88 |
 | Hard | ~0.92 |
 
+> [!IMPORTANT]
+> **Strict Scoring Range (Hackathon Compliance):** All task scores and breakdown metrics are strictly clamped between **0.01** and **0.99**. This ensures scores are never exactly `0.0` or `1.0`, satisfying the hackathon validation requirements.
+
 Results are saved to `baseline/results.json`.
 
 ---

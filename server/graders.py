@@ -116,6 +116,7 @@ class SupportGrader:
         total_score += ordering_penalty
         
         # Ensure breakdown scores are strictly in (0, 1) range
+        # Use 0.01 and 0.99 to be safe and clear of the boundaries
         for key in breakdown:
             breakdown[key] = max(0.01, min(0.99, breakdown[key]))
             
@@ -129,8 +130,8 @@ class SupportGrader:
         passed = total_score >= 0.6
         
         return GradeResult(
-            score=round(total_score, 4),
-            breakdown={k: round(v, 4) for k, v in breakdown.items()},
+            score=round(float(total_score), 4),
+            breakdown={k: round(float(v), 4) for k, v in breakdown.items()},
             feedback=feedback,
             passed=passed
         )

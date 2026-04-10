@@ -327,12 +327,12 @@ async def run_baseline():
             "easy_score": results["easy"]["score"],
             "medium_score": results["medium"]["score"],
             "hard_score": results["hard"]["score"],
-            "average_score": round(
+            "average_score": max(0.01, min(0.99, round(
                 (results["easy"]["score"] + 
                  results["medium"]["score"] + 
                  results["hard"]["score"]) / 3, 
                 4
-            ),
+            ))),
             "breakdown": {
                 "easy": {
                     "score": results["easy"]["score"],

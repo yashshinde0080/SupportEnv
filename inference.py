@@ -212,7 +212,8 @@ def main() -> None:
                     grade_resp = requests.post(grader_url, json={"session_id": session_id}, timeout=30)
                     if grade_resp.status_code == 200:
                         grade_data = grade_resp.json()
-                        final_score = float(grade_data.get('score', 0.01))
+                        # Strictly clamp between 0.01 and 0.99
+                        final_score = max(0.01, min(0.99, float(grade_data.get('score', 0.01))))
                         success = bool(grade_data.get('passed', False))
                 except Exception:
                     pass

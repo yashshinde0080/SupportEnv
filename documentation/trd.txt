@@ -165,7 +165,7 @@ SupportEnv/
     │  grade_episode()                                              │
     │    ├─ Collect episode_data (actions, targets, flags)          │
     │    └─ SupportGrader.grade_episode(**data) → GradeResult       │
-    │         ├─ score:     float [0.0, 1.0]                       │
+    │         ├─ score:     float (0.0, 1.0) strictly                 │
     │         ├─ breakdown: Dict[str, float]                        │
     │         ├─ feedback:  str                                     │
     │         └─ passed:    bool                                    │
@@ -194,7 +194,7 @@ SupportEnv/
     - SupportGrader.grade_episode() is the single entry point.
     - Dimension weights are read from TASK_DEFINITIONS or openenv.yaml.
     - GradeResult contains:
-        score (0.0–1.0), breakdown dict, feedback string, passed bool.
+        score (0.01–0.99), breakdown dict, feedback string, passed bool.
     - Determinism requirement: same inputs always yield same score.
 
 4.6 Baseline Policy (baseline/policy.py — 7 KB)
@@ -556,7 +556,7 @@ Episode             A single support-ticket interaction from reset to done
 Action              Agent's decision at each step
 Observation         Environment response (ticket info + feedback)
 State               Internal ground-truth data (hidden from agent)
-Grading             Post-episode deterministic scoring (0.0–1.0)
+Grading             Post-episode deterministic scoring (0.01–0.99)
 Reward              Per-step signal guiding agent learning
 Baseline            Reference rule-based agent for benchmarking
 OpenEnv             Open standard for RL environment hosting
