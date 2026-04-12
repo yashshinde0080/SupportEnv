@@ -203,6 +203,11 @@ class SupportEnvironment(Environment):
             )
             reward += final_reward
             self._state.total_reward += final_reward
+        
+        # Ensure reward is strictly in (0, 1) range for external evaluator
+        reward = max(0.01, min(0.99, float(reward)))
+        
+        if done:
             message += f" Episode complete. Total reward: {self._state.total_reward:.2f}"
         
         # Calculate steps remaining

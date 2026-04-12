@@ -20,7 +20,6 @@ class SemanticScorer:
             try:
                 from sentence_transformers import SentenceTransformer
                 # Using a small, fast model suitable for CPU inference in HF Spaces
-                # Load model from sentence-transformers/all-MiniLM-L6-v2 using HF_TOKEN from interface.py
                 from interface import Config
                 hf_token = Config.get_hf_token()
 
@@ -30,65 +29,97 @@ class SemanticScorer:
                         token=hf_token
                     )
                 else:
-                    # Fallback to loading without token (may fail for gated models)
                     self._model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-            except ImportError:
-                return None
             except Exception:
-                # Handle any other errors (e.g., network issues, invalid token)
                 return None
         return self._model
 
-    def evaluate_responses(self, responses: List[str], expected_resolution: str) -> Optional[Dict[str, float]]:
+    def evaluate_responses(self, responses: List[str], expected_resolution: str) -> Dict[str, float]:
         """
-        Evaluate the overall semantic quality of a list of responses
+        Evaluate the overall semantic quality of a list of responses.
         Returns a dict with empathy, solution, and resolution alignment scores.
         """
         if not responses or not expected_resolution:
             return {"empathy": 0.01, "solution": 0.01, "resolution": 0.01, "overall": 0.01}
 
-        if self.model is None:
-            return {"empathy": 0.01, "solution": 0.01, "resolution": 0.01, "overall": 0.01}
+        # Use model-based evaluation if available
+        if self.model is not None:
+            try:
+                from sklearn.metrics.pairwise import cosine_similarity
+                
+                combined_response = " ".join([r for r in responses if len(r) > 10])
+                if not combined_response:
+                    return self._fallback_evaluate(responses, expected_resolution)
 
-        combined_response = " ".join([r for r in responses if len(r) > 10])
-        if not combined_response:
-            return {"empathy": 0.01, "solution": 0.01, "resolution": 0.01, "overall": 0.01}
+                empathy_target = "I understand your frustration, I am here to help you."
+                solution_target = "I have a solution for you, please try to follow these steps:"
 
-        try:
-            from sklearn.metrics.pairwise import cosine_similarity
-            
-            empathy_target = "I understand your frustration, I am here to help you."
-            solution_target = "I have a solution for you, please try to follow these steps:"
+                embeddings = self.model.encode([combined_response, empathy_target, solution_target, expected_resolution])
+                embedded_resp = embeddings[0].reshape(1, -1)
+                
+                emb_empathy = embeddings[1].reshape(1, -1)
+                emb_solution = embeddings[2].reshape(1, -1)
+                emb_resolution = embeddings[3].reshape(1, -1)
 
-            embeddings = self.model.encode([combined_response, empathy_target, solution_target, expected_resolution])
-            embedded_resp = embeddings[0].reshape(1, -1)
-            
-            emb_empathy = embeddings[1].reshape(1, -1)
-            emb_solution = embeddings[2].reshape(1, -1)
-            emb_resolution = embeddings[3].reshape(1, -1)
+                sim_empathy = float(cosine_similarity(embedded_resp, emb_empathy)[0][0])
+                sim_solution = float(cosine_similarity(embedded_resp, emb_solution)[0][0])
+                sim_resolution = float(cosine_similarity(embedded_resp, emb_resolution)[0][0])
+                
+                # Non-linear scaling
+                def scale(sim):
+                    return min(0.99, max(0.01, (sim - 0.1) / 0.7))
 
-            sim_empathy = float(cosine_similarity(embedded_resp, emb_empathy)[0][0])
-            sim_solution = float(cosine_similarity(embedded_resp, emb_solution)[0][0])
-            sim_resolution = float(cosine_similarity(embedded_resp, emb_resolution)[0][0])
-            
-            # Non-linear scaling: 0.1 similarity is baseline, 0.8 similarity is perfect.
-            def scale(sim):
-                return min(0.99, max(0.01, (sim - 0.1) / 0.7))
+                empathy_score = scale(sim_empathy)
+                solution_score = scale(sim_solution)
+                resolution_score = max(0.01, min(0.99, (sim_resolution - 0.2) / 0.7))
 
-            empathy_score = scale(sim_empathy)
-            solution_score = scale(sim_solution)
-            resolution_score = max(0.01, min(0.99, (sim_resolution - 0.2) / 0.7))
+                overall = (empathy_score * 0.2) + (solution_score * 0.2) + (resolution_score * 0.6)
+                
+                return {
+                    "empathy": round(empathy_score, 2),
+                    "solution": round(solution_score, 2),
+                    "resolution": round(resolution_score, 2),
+                    "overall": round(overall, 2)
+                }
+            except Exception:
+                pass
+        
+        # Fallback to keyword-based evaluation
+        return self._fallback_evaluate(responses, expected_resolution)
 
-            overall = (empathy_score * 0.2) + (solution_score * 0.2) + (resolution_score * 0.6)
-            
-            return {
-                "empathy": empathy_score,
-                "solution": solution_score,
-                "resolution": resolution_score,
-                "overall": overall
-            }
-        except Exception:
-            # Fallback if something goes wrong
-            return None
+    def _fallback_evaluate(self, responses: List[str], expected_resolution: str) -> Dict[str, float]:
+        """Deterministic keyword-based fallback if model is unavailable."""
+        combined_response = " ".join([r.lower() for r in responses])
+        expected_lower = expected_resolution.lower()
+
+        # Simple empathy keywords
+        empathy_keywords = ["understand", "sorry", "apologize", "help", "thank", "frustrated", "regret"]
+        empathy_p = sum(1 for kw in empathy_keywords if kw in combined_response)
+        empathy_score = min(0.99, 0.2 + (empathy_p * 0.2))
+
+        # Simple solution keywords
+        solution_keywords = ["steps", "follow", "instruction", "fix", "resolution", "process", "done"]
+        solution_p = sum(1 for kw in solution_keywords if kw in combined_response)
+        solution_score = min(0.99, 0.2 + (solution_p * 0.2))
+
+        # Basic overlap for resolution alignment
+        resp_words = set(combined_response.split())
+        target_words = set(expected_lower.split())
+        target_words = {w for w in target_words if len(w) > 3} # Filter short words
+        
+        if not target_words:
+            resolution_score = 0.5
+        else:
+            overlap = len(resp_words.intersection(target_words))
+            resolution_score = min(0.99, 0.1 + (overlap / len(target_words)) * 0.9)
+
+        overall = (empathy_score * 0.2) + (solution_score * 0.2) + (resolution_score * 0.6)
+
+        return {
+            "empathy": round(empathy_score, 2),
+            "solution": round(solution_score, 2),
+            "resolution": round(resolution_score, 2),
+            "overall": round(overall, 2)
+        }
 
 semantic_scorer = SemanticScorer()

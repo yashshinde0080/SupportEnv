@@ -9,6 +9,7 @@ for optimal resource usage on free-tier Spaces.
 import os
 import uuid
 import logging
+import json
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -56,6 +57,33 @@ def _cleanup_sessions():
         logger.info(f"Session limit reached ({len(active_sessions)}). Clearing old sessions.")
         active_sessions = {}
 
+METRICS_FILE = "metrics.json"
+
+def _load_metrics():
+    """Load global metrics from file."""
+    global GLOBAL_METRICS
+    if os.path.exists(METRICS_FILE):
+        try:
+            with open(METRICS_FILE, 'r') as f:
+                data = json.load(f)
+                # Update existing dict to maintain reference if possible, 
+                # or just re-assign (it's global)
+                GLOBAL_METRICS.update(data)
+                logger.info("Loaded metrics from persistence.")
+        except Exception as e:
+            logger.error(f"Error loading metrics: {e}")
+
+def _save_metrics():
+    """Save global metrics to file."""
+    try:
+        with open(METRICS_FILE, 'w') as f:
+            json.dump(GLOBAL_METRICS, f)
+    except Exception as e:
+        logger.error(f"Error saving metrics: {e}")
+
+# Load metrics on startup
+_load_metrics()
+
 def _update_global_metrics(difficulty: str, score: float, passed: bool):
     """Update global metrics on episode completion."""
     GLOBAL_METRICS["total_episodes"] += 1
@@ -68,6 +96,9 @@ def _update_global_metrics(difficulty: str, score: float, passed: bool):
         GLOBAL_METRICS["scores_by_difficulty"][difficulty].append(score)
         scores = GLOBAL_METRICS["scores_by_difficulty"][difficulty]
         GLOBAL_METRICS[f"avg_{difficulty}_score"] = sum(scores) / len(scores)
+    
+    # Persist changes
+    _save_metrics()
 
 # ============== Helper Functions ==============
 
