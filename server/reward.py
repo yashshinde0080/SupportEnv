@@ -150,7 +150,9 @@ class RewardEngine:
                 
         elif action_type == "request_info":
             # Small reward for appropriate information gathering
-            if step_count < 3 and task_difficulty in ["medium", "hard"]:
+            # Threshold is proportional to task complexity (40% of max steps)
+            info_threshold = max(3, int(max_steps * 0.4))
+            if step_count < info_threshold and task_difficulty in ["medium", "hard"]:
                 breakdown.response_reward = 0.10
                 breakdown.reason += "Information gathering. "
             else:
@@ -172,18 +174,7 @@ class RewardEngine:
         elif step_count > max_steps * 0.7:
             breakdown.penalty += self.TOO_MANY_STEPS
             
-        # Calibrated Confidence adjustment
-        if confidence is not None:
-            # We want to reward being confident when right, and heavily penalize when confident and wrong
-            temp_total = breakdown.classification_reward + breakdown.response_reward + breakdown.escalation_reward + breakdown.efficiency_reward + breakdown.tone_reward + breakdown.penalty
-            if temp_total > 0:
-                breakdown.total += (confidence - 0.5) * 0.1
-                breakdown.reason += f"Confidence bonus ({confidence}). "
-            elif temp_total < 0:
-                breakdown.total -= (confidence) * 0.1
-                breakdown.reason += f"Overconfidence penalty ({confidence}). "
-        
-        # Compute total
+        # Compute total from all components
         breakdown.total = (
             breakdown.classification_reward +
             breakdown.response_reward +
@@ -194,10 +185,21 @@ class RewardEngine:
             breakdown.penalty
         )
         
+        # Calibrated Confidence adjustment (applied AFTER base total)
+        if confidence is not None:
+            # Reward being confident when right, penalize when confident and wrong
+            if breakdown.total > 0:
+                breakdown.total += (confidence - 0.5) * 0.1
+                breakdown.reason += f"Confidence bonus ({confidence}). "
+            elif breakdown.total < 0:
+                breakdown.total -= confidence * 0.1
+                breakdown.reason += f"Overconfidence penalty ({confidence}). "
+        
         # Clamp total to reasonable range
         breakdown.total = max(-1.0, min(1.0, breakdown.total))
         
         return breakdown
+
     
     def _compute_classification_reward(self, predicted: str, target: str) -> float:
         """Compute reward for classification action."""

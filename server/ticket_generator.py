@@ -4,7 +4,6 @@ import json
 import logging
 from typing import Dict, Any, List, Tuple, Optional
 from dataclasses import dataclass, asdict
-import litellm
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -825,6 +824,7 @@ class TicketGenerator:
 
     def _generate_with_llm(self, difficulty: str, task_id: str = None) -> Dict[str, Any]:
         """Generate a ticket using the configured LLM."""
+        import litellm  # Lazy import — only needed when USE_LLM_GENERATOR=True
         prompt = f"""
         Generate a realistic customer support ticket for a company.
         Difficulty: {difficulty}
@@ -906,38 +906,44 @@ class TicketGenerator:
         }
     
     def _fill_template(self, template: str) -> str:
-        """Fill in placeholder variables in template."""
-        replacements = {
-            "{email}": self._generate_email(),
-            "{old_email}": self._generate_email(),
-            "{order_id}": f"{self._rng.randint(100000, 999999)}",
-            "{date}": f"{self._rng.randint(1, 28)}/{self._rng.randint(1, 12)}/2024",
-            "{date1}": f"{self._rng.randint(1, 14)}/03/2024",
-            "{date2}": f"{self._rng.randint(15, 28)}/03/2024",
-            "{amount}": f"{self._rng.randint(20, 500)}.{self._rng.randint(0, 99):02d}",
-            "{version}": f"{self._rng.randint(2, 5)}.{self._rng.randint(0, 9)}.{self._rng.randint(0, 9)}",
-            "{device}": self._rng.choice(["iPhone 14", "Samsung S23", "Pixel 7", "iPad Pro"]),
-            "{days}": str(self._rng.randint(1, 25)),
-            "{case_id}": f"CS-{self._rng.randint(10000, 99999)}",
-            "{address}": f"{self._rng.randint(100, 999)} Unknown St, Some City",
-            "{year}": str(self._rng.randint(2018, 2022)),
-            "{emotion}": self._rng.choice(["deeply upset", "horrified", "traumatized"]),
-            "{ref}": f"REF-{self._rng.randint(1000, 9999)}",
-            "{personal_info}": self._rng.choice(["SSN", "date of birth", "full name", "drivers license"]),
-            "{patient_id}": f"PT-{self._rng.randint(1000, 9999)}",
-            "{device}": self._rng.choice(["GlucoMeter X", "HeartMonitor Pro", "InsulinPump 2.0"]),
-            "{product}": self._rng.choice(["UltraDesk", "SmartChair", "SuperMonitor"]),
-            "{personal_detail}": self._rng.choice(["I have no family left.", "My business is bankrupt now.", "I can't face my employees."]),
-            "{phone}": f"+1-{self._rng.randint(200, 999)}-{self._rng.randint(100, 999)}-{self._rng.randint(1000, 9999)}",
-            "{error_code}": f"ERR-{self._rng.randint(1000, 9999)}",
-            "{location}": self._rng.choice(["Downtown", "Westside", "Northbranch", "Main St"]),
-            "{name}": self._rng.choice(["Alex", "Sam", "Jordan", "Taylor"]),
-            "{attribute}": self._rng.choice(["age", "appearance", "accent", "background"])
+        """Fill in placeholder variables in template.
+        
+        Only generates values for placeholders that exist in the template,
+        preserving RNG state for seeded reproducibility.
+        """
+        # Lazy generators — only called when the key is found in the template
+        generators = {
+            "{email}": lambda: self._generate_email(),
+            "{old_email}": lambda: self._generate_email(),
+            "{order_id}": lambda: f"{self._rng.randint(100000, 999999)}",
+            "{date}": lambda: f"{self._rng.randint(1, 28)}/{self._rng.randint(1, 12)}/2024",
+            "{date1}": lambda: f"{self._rng.randint(1, 14)}/03/2024",
+            "{date2}": lambda: f"{self._rng.randint(15, 28)}/03/2024",
+            "{amount}": lambda: f"{self._rng.randint(20, 500)}.{self._rng.randint(0, 99):02d}",
+            "{version}": lambda: f"{self._rng.randint(2, 5)}.{self._rng.randint(0, 9)}.{self._rng.randint(0, 9)}",
+            "{device}": lambda: self._rng.choice(["iPhone 14", "Samsung S23", "Pixel 7", "iPad Pro"]),
+            "{days}": lambda: str(self._rng.randint(1, 25)),
+            "{case_id}": lambda: f"CS-{self._rng.randint(10000, 99999)}",
+            "{address}": lambda: f"{self._rng.randint(100, 999)} Unknown St, Some City",
+            "{year}": lambda: str(self._rng.randint(2018, 2022)),
+            "{emotion}": lambda: self._rng.choice(["deeply upset", "horrified", "traumatized"]),
+            "{ref}": lambda: f"REF-{self._rng.randint(1000, 9999)}",
+            "{personal_info}": lambda: self._rng.choice(["SSN", "date of birth", "full name", "drivers license"]),
+            "{patient_id}": lambda: f"PT-{self._rng.randint(1000, 9999)}",
+            "{medical_device}": lambda: self._rng.choice(["GlucoMeter X", "HeartMonitor Pro", "InsulinPump 2.0"]),
+            "{product}": lambda: self._rng.choice(["UltraDesk", "SmartChair", "SuperMonitor"]),
+            "{personal_detail}": lambda: self._rng.choice(["I have no family left.", "My business is bankrupt now.", "I can't face my employees."]),
+            "{phone}": lambda: f"+1-{self._rng.randint(200, 999)}-{self._rng.randint(100, 999)}-{self._rng.randint(1000, 9999)}",
+            "{error_code}": lambda: f"ERR-{self._rng.randint(1000, 9999)}",
+            "{location}": lambda: self._rng.choice(["Downtown", "Westside", "Northbranch", "Main St"]),
+            "{name}": lambda: self._rng.choice(["Alex", "Sam", "Jordan", "Taylor"]),
+            "{attribute}": lambda: self._rng.choice(["age", "appearance", "accent", "background"])
         }
         
         result = template
-        for key, value in replacements.items():
-            result = result.replace(key, value)
+        for key, gen_fn in generators.items():
+            if key in result:
+                result = result.replace(key, gen_fn())
         return result
     
     def _generate_email(self) -> str:

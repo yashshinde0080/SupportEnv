@@ -51,8 +51,10 @@ class SemanticScorer:
                 if not combined_response:
                     return self._fallback_evaluate(responses, expected_resolution)
 
-                empathy_target = "I understand your frustration, I am here to help you."
-                solution_target = "I have a solution for you, please try to follow these steps:"
+                from interface import Config
+                targets = Config.get_semantic_targets()
+                empathy_target = targets["empathy"]
+                solution_target = targets["solution"]
 
                 embeddings = self.model.encode([combined_response, empathy_target, solution_target, expected_resolution])
                 embedded_resp = embeddings[0].reshape(1, -1)

@@ -149,7 +149,7 @@ class SupportGrader:
 
         if idx_resolve_or_escalate != -1:
             if idx_classify == -1 or idx_resolve_or_escalate < idx_classify:
-                return -0.25 # Penalty
+                return -0.15 # Penalty (reduced from -0.25 to be proportional)
         return 0.0
     
     def _grade_classification(
@@ -353,9 +353,6 @@ class SupportGrader:
         else:
             # Wrong: escalated when not needed (unnecessary escalation)
             return 0.1  # Harsher penalty for wasting resources
-
-        # Final safety clamp
-        return max(0.01, min(0.99, 0.0)) # This line shouldn't be reached but for safety
     
     def _grade_resolution(
         self,
@@ -419,6 +416,9 @@ class SupportGrader:
     
     def _grade_efficiency(self, steps: int, max_steps: int, difficulty: str = "easy") -> float:
         """Grade step efficiency. Harder tasks require more deliberation."""
+        if max_steps <= 0:
+            return 0.5  # Safety: can't grade without valid max_steps
+        
         if steps <= 1:
             return 0.99 if difficulty == "easy" else 0.5 # Discourage one-step solutions for complex tasks
         
@@ -429,11 +429,13 @@ class SupportGrader:
                 return 0.4 # Superficial handling
             if steps <= 9:
                 return 0.99 # High quality deliberation
-            # Penalize the tail end for inefficiency
-            return max(0.01, min(0.99, round(max(0.3, 1.0 - 0.8 * ((steps - 9) / (max_steps - 9))), 2)))
+            # Penalize the tail end for inefficiency (guard against div-by-zero when max_steps == 9)
+            denominator = max(1, max_steps - 9)
+            return max(0.01, min(0.99, round(max(0.3, 1.0 - 0.8 * ((steps - 9) / denominator)), 2)))
             
-        # Standard linear for easy/medium
-        return max(0.01, min(0.99, round(1.0 - 0.8 * ((steps - 1) / (max_steps - 1)), 2)))
+        # Standard linear for easy/medium (guard against div-by-zero when max_steps == 1)
+        denominator = max(1, max_steps - 1)
+        return max(0.01, min(0.99, round(1.0 - 0.8 * ((steps - 1) / denominator), 2)))
     
     def _get_weights(self, difficulty: str) -> Dict[str, float]:
         """Get grading weights based on difficulty."""

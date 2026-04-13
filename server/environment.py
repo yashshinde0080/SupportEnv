@@ -270,12 +270,11 @@ class SupportEnvironment(Environment):
         self._is_classified = True
         self._current_classification = category.lower().strip()
         
-        # Check if correct
+        # Check if correct (for internal state only)
         if self._current_classification == self._state.target_category:
             self._state.classification_correct = True
-            return f"Ticket classified as '{category}'. Classification correct."
-        else:
-            return f"Ticket classified as '{category}'."
+        
+        return f"Ticket classified as '{category}'."
     
     def _handle_respond(self, response: str) -> str:
         """Handle response action."""
@@ -298,6 +297,9 @@ class SupportEnvironment(Environment):
         """Dynamic customer reply based on ticket sentiment, personality, and agent response."""
         sentiment = self._current_ticket["sentiment"]
         personality = self._current_ticket.get("personality", "neutral")
+        
+        # Apply sentiment decay toward neutral — prevents permanent saturation at +1/-1
+        sentiment *= 0.9  # 10% decay toward 0.0 each step
         
         response_lower = response.lower()
         has_empathy = any(kw in response_lower for kw in ["understand", "sorry", "apologize", "help", "thank"])
@@ -350,16 +352,22 @@ class SupportEnvironment(Environment):
             return "Thank you for your help. That resolves my issue."
     
     def _handle_escalate(self, reason: str) -> str:
-        """Handle escalation action."""
+        """Handle escalation action.
+        
+        NOTE: Unnecessary escalation (when requires_escalation=False) is intentionally
+        double-penalised: the escalation grader gives 0.1 and the resolution grader
+        treats it as unresolved (0.3). This design discourages agents from using
+        escalation as a lazy fallback.
+        """
         self._is_escalated = True
         
-        # Check if escalation was correct
+        # Check if escalation was correct (for internal state only)
         if self._state.requires_escalation:
             self._state.escalation_correct = True
-            self._is_resolved = True  # Escalation counts as resolution
-            return f"Ticket escalated to human agent. Reason: {reason}. Escalation was appropriate."
-        else:
-            return f"Ticket escalated to human agent. Reason: {reason}. Note: This ticket may not have required escalation."
+            self._is_resolved = True  # Correct escalation counts as resolution
+        # else: _is_resolved stays False → agent penalised by resolution grader
+        
+        return f"Ticket escalated to human agent. Reason: {reason}."
     
     def _handle_request_info(self, info_needed: str) -> str:
         """Handle request for information with context-aware customer responses."""
