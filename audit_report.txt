@@ -25,9 +25,9 @@
 ## 🟢 P3 — Development Improvements
 - [x] D8: Lazy-import `litellm` in `ticket_generator.py`
 - [x] D11: Optimize `_fill_template` to only generate needed values
-- [ ] D10: Replace `print()` with proper logging (deferred — low risk)
+- [x] D10: Replace `print()` with proper logging
 - [x] C6: Create test suite skeleton
-- [ ] D12: Remove dead `app_SuEnv.py` file (confirmed safe, manual delete)
+- [x] D12: Remove dead `app_SuEnv.py` file (confirmed safe, manual delete)
 
 
 # WALKTHROUGH
@@ -114,5 +114,5 @@ All 43 tests pass, covering:
 
 | Item | Status | Notes |
 |------|--------|-------|
-| D10: Replace print() with logging | Deferred | Low risk, no functional impact |
-| D12: Remove app_SuEnv.py | Ready | Confirmed dead file, safe to git rm |
+| D10: Replace print() with logging | Done | Standardized on logging library |
+| D12: Remove app_SuEnv.py | Done | Deleted redundant file |

@@ -25,7 +25,16 @@ import traceback
 import sys
 import uuid
 import time
+import logging
 from pathlib import Path
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
 
 # sys.path manipulation removed as per judge recommendation
 # Run with 'python -m server.app' or set PYTHONPATH
@@ -440,11 +449,11 @@ try:
     # Create Gradio app and mount it
     demo, theme, css = create_gradio_interface()
     app = gr.mount_gradio_app(app, demo, path="/web")
-    print("[INFO] Gradio UI mounted at /web")
+    logger.info("Gradio UI mounted at /web")
 except ImportError:
-    print("[INFO] Gradio UI not available (gradio_ui module not found) — API-only mode")
+    logger.info("Gradio UI not available (gradio_ui module not found) — API-only mode")
 except Exception as e:
-    print(f"[WARNING] Failed to mount Gradio UI: {e}")
+    logger.warning(f"Failed to mount Gradio UI: {e}")
 
 
 def main():
