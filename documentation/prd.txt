@@ -5,8 +5,8 @@
                      SupportEnv — Customer Support RL Environment
 ================================================================================
 
-Document Version  : 2.0
-Date              : 2026-03-27
+Document Version  : 2.1
+Date              : 2026-04-14
 Author            : 
 Status            : Active
 License           : MIT
@@ -94,7 +94,7 @@ Persona 4 — Support Operations Lead
     │  grade_episode()         →  GradeResult             │
     └────────────────────────────────────────────────────┘
 
-5.2 Action Space (Discrete, 5 actions)
+5.2 Action Space (Discrete, 6 actions)
 
     Action         Description                      Content
     ──────────     ────────────────────────────────  ─────────────────────
@@ -103,6 +103,7 @@ Persona 4 — Support Operations Lead
     respond        Send a response to customer       Free-text response
     escalate       Escalate to human agent           Reason for escalation
     request_info   Ask customer for more info        What info is needed
+    lookup_kb      Search knowledge-base             Search query
     resolve        Mark ticket as resolved            Resolution summary
 
 5.3 Observation Space
@@ -274,13 +275,13 @@ OpenEnv spec changes                    Track openenv-core releases
 12. FUTURE ROADMAP
 ================================================================================
 
-Phase   Feature                         Priority
-──────  ──────────────────────────────  ────────
-v1.1    Multi-turn conversation depth   High
-v1.2    LLM-judge response scoring      Medium
-v1.3    Custom ticket upload             Medium
-v2.0    Multi-agent support team sim    Low
-v2.1    Live customer integration        Exploratory
+Phase   Feature                         Priority STATUS
+──────  ──────────────────────────────  ──────── ────────────
+v1.1    Multi-turn conversation depth   High     Implemented
+v1.2    Semantic response scoring       Medium   Implemented
+v1.3    Custom ticket upload            Medium   Open
+v2.0    Multi-agent support team sim    Low      Open
+v2.1    Live customer integration        Exploration
 
 ================================================================================
                               END OF PRD

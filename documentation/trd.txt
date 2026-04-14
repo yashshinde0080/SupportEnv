@@ -5,8 +5,8 @@
                   SupportEnv — Customer Support RL Environment
 ================================================================================
 
-Document Version  : 2.0
-Date              : 2026-03-27
+Document Version  : 2.1
+Date              : 2026-04-14
 Author            : Yash Shinde
 Status            : Active
 License           : MIT
@@ -68,53 +68,49 @@ Package Mgmt        pip / uv                 pyproject.toml (PEP 621)
 ================================================================================
 
 SupportEnv/
-├── main.py                    # Entry-point (imports server.app)
+├── app.py                     # Root entry-point for Spaces (Gradio launcher)
+├── gradio_ui.py               # Gradio interface definition
 ├── models.py                  # Pydantic models: Action, Observation, State
 ├── client.py                  # WebSocket client (EnvClient subclass)
-├── config.py                  # Settings via pydantic-settings + .env
+├── config.py                  # Settings via pydantic-settings
+├── interface.py               # Centralised configuration & target strings
 ├── openenv.yaml               # OpenEnv environment manifest
 ├── pyproject.toml             # PEP 621 package definition
-├── requirements.txt           # Flat dependency list (fallback)
+├── requirements.txt           # Flat dependency list
 ├── .env.example               # Environment variable template
 │
-├── server/                    # Backend package
+├── server/                    # Core Backend Package
 │   ├── __init__.py
-│   ├── app.py                 # FastAPI application + route registration
-│   ├── environment.py         # Core RL loop (reset / step / state / grade)
-│   ├── ticket_generator.py    # Ticket template engine + task definitions
-│   ├── graders.py             # Deterministic grading logic
-│   ├── reward.py              # Per-step & episode reward computation
-│   ├── tasks.py               # (Placeholder) Task registry
-│   ├── utils.py               # (Placeholder) Shared utilities
-│   └── Dockerfile             # Production container image
+│   ├── app.py                 # FastAPI application & REST routes
+│   ├── environment.py         # SupportEnvironment RL loop
+│   ├── ticket_generator.py    # Ticket engine + Dynamic Personality
+│   ├── graders.py             # Weighted deterministic grading
+│   ├── reward.py              # Reward computation logic
+│   └── semantic_scorer.py     # Sentence-Transformers implementation
 │
-├── baseline/                  # Reference agent
+├── baseline/                  # Reference Agent
 │   ├── __init__.py
-│   ├── policy.py              # Rule-based baseline policy
-│   ├── run_baseline.py        # CLI runner + results writer
-│   └── results.json           # Cached baseline scores
+│   ├── policy.py              # Rule-based policy
+│   ├── run_baseline.py        # CLI benchmark runner
+│   └── results.json           # Cached scores
 │
-├── frontend/                  # Web UI
+├── tests/                     # Automated Test Suite
 │   ├── __init__.py
-│   └── gradio_ui.py           # Gradio interface (mounted at /web)
-│
-├── tests/                     # Automated tests
-│   ├── __init__.py
-│   ├── test_environment.py    # Environment unit tests
+│   ├── test_environment.py    # Core unit tests
 │   ├── test_graders.py        # Grader determinism tests
-│   ├── test_api.py            # (Placeholder) API integration tests
-│   └── test_baseline.py       # (Placeholder) Baseline regression tests
+│   ├── test_reward.py         # Reward engine tests
+│   └── test_ticket_generator.py # Template engine tests
 │
 ├── scripts/                   # DevOps & utility scripts
 │   ├── linux/
 │   │   └── validate.sh
 │   └── windows/
 │
-├── Files/                     # Project documentation
-│   ├── prd                    # Product Requirements Document
-│   └── trd                    # Technical Requirements Document (this file)
+├── documentation/             # Project Documentation
+│   ├── prd.txt                # Product Requirements Document
+│   └── trd.txt                # Technical Requirements Document (this file)
 │
-└── docs.txt                   # Extended documentation / notes
+└── docs.txt                   # Legacy notes / Scratchpad
 
 ================================================================================
 4. ARCHITECTURE DETAILS
@@ -180,7 +176,10 @@ SupportEnv/
         ticket templates (subject, body, category, sentiment,
         expected_resolution, requires_escalation).
     - TicketGenerator(seed) → generate_ticket(difficulty, task_id)
-      Returns a dict with all ticket fields.
+    - **Dynamic Personality**: Implements sentiment decay and personality-specific 
+      customer replies (Aggressive, Anxious, Friendly, Neutral) based on agent 
+      interaction.
+Printable ticket objects are returned with unique IDs.
 
 4.4 Reward Engine (server/reward.py — 11 KB)
 
@@ -193,6 +192,11 @@ SupportEnv/
 
     - SupportGrader.grade_episode() is the single entry point.
     - Dimension weights are read from TASK_DEFINITIONS or openenv.yaml.
+    - **Semantic Scoring**: Uses `server/semantic_scorer.py` powered by 
+      `sentence-transformers/all-MiniLM-L6-v2` to evaluate:
+        - Response Empathy
+        - Solution Orientation
+        - Resolution Alignment (Cosine Similarity)
     - GradeResult contains:
         score (0.01–0.99), breakdown dict, feedback string, passed bool.
     - Determinism requirement: same inputs always yield same score.
@@ -261,7 +265,7 @@ SupportEnv/
 6.1 SupportAction (extends Action)
     Fields:
       action_type : Literal["classify","respond","escalate",
-                            "request_info","resolve"]
+                            "request_info","resolve","lookup_kb"]
       content     : str
       confidence  : Optional[float]  (0.0–1.0)
 
@@ -519,14 +523,13 @@ Rate Limiting       RATE_LIMIT_ENABLED       False                  bool
 
 ID     Item                                     Severity   Status
 ─────  ────────────────────────────────────────  ─────────  ──────
-TD-01  server/tasks.py is empty placeholder      Low        Open
-TD-02  server/utils.py is empty placeholder      Low        Open
-TD-03  tests/test_api.py is empty placeholder    Medium     Open
-TD-04  tests/test_baseline.py is empty           Medium     Open
+TD-01  server/tasks.py incorporated into config  Low        Fixed
+TD-02  server/utils.py helper logic in env       Low        Fixed
+TD-03  tests/test_api.py coverage                Medium     Partial
+TD-04  tests/test_baseline.py coverage           Medium     Partial
 TD-05  Session store is in-memory only           Medium     Open
-TD-06  No auth middleware implemented yet        Medium     Open
-TD-07  uuid import missing in app.py (L275)      Low        Open
-       (imported late, should be at top)
+TD-06  No auth middleware implemented yet        Medium     Implemented
+TD-07  uuid import missing in app.py             Low        Fixed
 
 ================================================================================
 16. MONITORING & OBSERVABILITY
